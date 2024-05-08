@@ -4,7 +4,6 @@ import tkinter.messagebox as mb
 import os
 import resources 
 import time
-
 # TO FIX: practicepage skips a line when moving onto next segment after completing current segment
 #---------------------------------NOTEPAD---------------------------------------
 #practice idea: use network ports and another client application to view typing
