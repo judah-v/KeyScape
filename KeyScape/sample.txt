@@ -1,39 +1,9 @@
 from importlib import reload
-from datetime import timedelta
 import tkinter as tk
 import tkinter.messagebox as mb
 import os
 import resources 
 import time
-
-
-
-
-
-
-
-
-
-
-#
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # TO FIX: practicepage skips a line when moving onto next segment after completing current segment
 #---------------------------------NOTEPAD---------------------------------------
@@ -43,10 +13,6 @@ import time
 #prevent more than one practice page being opened simultaneously
 
 #add buttons to practice pages to navigate text segments
-
-#add a history variable to resources.py to save user data locally/enable
-#separate history variables (have a tuple for each file and use line_no of
-#tuple in resources.py next to that file's path)
 
 #add analytics system
 #-------------------------------------------------------------------------------
@@ -260,11 +226,11 @@ class Cursor:
             
             cps = 1/(self.Page.time_taken/len(self.typable_text))
             wpm = cps /5*60
-            minutes = int(self.Page.time_taken/60)
-            seconds = round(self.Page.time_taken % 60)
+            mins = int(self.Page.time_taken/60)
+            secs = round(self.Page.time_taken % 60)
 
             print(len(self.typable_text))
-            print(f"{minutes}:{seconds:0>2}")
+            print(f"{mins}:{secs:0>2}")
             print("Wpm:", wpm)
         elif self.main:
             self.char = char
@@ -400,7 +366,9 @@ class Cursor:
         return
     
 if __name__ == '__main__':
-    os.chdir('C:\\Users\\judah\\Desktop\\Python\\Keyscape')
+    os.chdir(resources.data_folder) 
+    # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
+    
     os.system('type main.py > sample.txt')
 
     app = App()

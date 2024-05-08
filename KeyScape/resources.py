@@ -1,8 +1,9 @@
 import itertools
-data_folder = 'C:\\Users\\judah\\Desktop\\Python\\KeyScape\\'
-data_filename = 'user_data.txt'
 
-data = open(data_folder+data_filename).readlines()
+data_folder = __file__[:-12] # change if file with user data is not in the same folder as this file
+data_file = 'user_data.txt'
+data_filename = data_folder + data_file
+data = open(data_filename).readlines()
 
 exec(f"filenames = {data[0]}")
 exec(f"save_data = {data[1]}")

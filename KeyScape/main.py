@@ -4,6 +4,7 @@ import tkinter.messagebox as mb
 import os
 import resources 
 import time
+
 # TO FIX: practicepage skips a line when moving onto next segment after completing current segment
 #---------------------------------NOTEPAD---------------------------------------
 #practice idea: use network ports and another client application to view typing
@@ -365,7 +366,9 @@ class Cursor:
         return
     
 if __name__ == '__main__':
-    os.chdir('C:\\Users\\judah\\Desktop\\Python\\Keyscape')
+    os.chdir(resources.data_folder) 
+    # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
+    
     os.system('type main.py > sample.txt')
 
     app = App()
