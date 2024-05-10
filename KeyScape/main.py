@@ -5,17 +5,17 @@ import os
 import resources 
 import time
 
-# TO DO: test .gitignore file to make sure it works
-# also improve readme.md visuals
 #---------------------------------NOTEPAD---------------------------------------
-#practice idea: use network ports and another client application to view typing
-#practice sessions in real time
+# practice idea: use network ports and another client application to view typing
+#                practice sessions in real time
 
-#prevent more than one practice page being opened simultaneously
+# prevent more than one practice page being opened simultaneously
 
-#add buttons to practice pages to navigate text segments
+# add buttons to practice pages to navigate text segments
 
-#add analytics system
+# create pause functionality
+
+# add analytics system
 #-------------------------------------------------------------------------------
 
 def track_time(func):
@@ -51,6 +51,7 @@ def get_data(filename):
         filenames, s_data = [eval(line) for line in file.readlines()]
         index = filenames.index(filename)
         return s_data[index]
+
 class App:
     def __init__(self):
         self.Home = Page('KeyScape', app=self, kind='home')
