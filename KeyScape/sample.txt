@@ -1,7 +1,7 @@
 from importlib import reload
 import tkinter as tk
 import tkinter.messagebox as mb
-impor
+import os
 import resources 
 import time
 
