@@ -5,7 +5,8 @@ import os
 import resources 
 import time
 
-# TO FIX: practicepage skips a line when moving onto next segment after completing current segment
+# TO DO: test .gitignore file to make sure it works
+# also improve readme.md visuals
 #---------------------------------NOTEPAD---------------------------------------
 #practice idea: use network ports and another client application to view typing
 #practice sessions in real time
