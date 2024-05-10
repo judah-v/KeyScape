@@ -1,2 +1,0 @@
-['sample.txt']
-[{'line_no': 90, 'segment_size': 1}]
