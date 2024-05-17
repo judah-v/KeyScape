@@ -19,7 +19,7 @@ SAMPLE_SIZE = data['segment_size']
 
 CURSOR = {'width': 8, 'height': 14}
 
-WIN = {
+WIN_CONFIG = {
     'x': 1000, 
     'y': 50, 
     'width': 500, 

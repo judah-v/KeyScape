@@ -30,6 +30,7 @@ def track_time(func):
         return 
     return wrapper
 
+
 def save_data(filename, data: dict):
     '''
     data -> [index, new_value]
@@ -46,11 +47,13 @@ def save_data(filename, data: dict):
         file.truncate()
     reload(resources)
 
+
 def get_data(filename):
     with open(resources.data_filename) as file:
         filenames, s_data = [eval(line) for line in file.readlines()]
         index = filenames.index(filename)
         return s_data[index]
+
 
 class App:
     def __init__(self):
@@ -83,15 +86,16 @@ class App:
     
     def run(self):
         return self.Home.main.mainloop()
-    
+
+
 class Page:
     def __init__(self, title: str, 
                  text: str ='', 
                  app: App =None,
                  kind: str ='text', 
-                 geometry=f"{resources.WIN['width']}x{resources.WIN['height']}+{resources.WIN['x']}+{resources.WIN['y']}", 
-                 name='typing_page', dimensions=(resources.WIN['min_width'],
-                 resources.WIN['min_height'])):
+                 geometry=f"{resources.WIN_CONFIG['width']}x{resources.WIN_CONFIG['height']}+{resources.WIN_CONFIG['x']}+{resources.WIN_CONFIG['y']}", 
+                 name='typing_page', dimensions=(resources.WIN_CONFIG['min_width'],
+                 resources.WIN_CONFIG['min_height'])):
         main = tk.Tk(name)
         main.title(title)
         main.minsize(*dimensions)
@@ -123,23 +127,23 @@ class Page:
         self.curr_line = 0
 
     def display_text(self, txt: str, bg: str ='', fg: str ='black') -> str:
-        WIN = resources.WIN
+        WIN_CONFIG = resources.WIN_CONFIG
         CURSOR = resources.CURSOR
         max_length = max([len(l) for l in txt.splitlines()]) #get length of longest line in text
-        x_pad = WIN['x_padding']
-        y_pad = WIN['y_padding']
-        bottom_pad = WIN['b_padding']
+        x_pad = WIN_CONFIG['x_padding']
+        y_pad = WIN_CONFIG['y_padding']
+        bottom_pad = WIN_CONFIG['b_padding']
         c_width = CURSOR['width']
         c_height = CURSOR['height']
         new_wn_height = y_pad + (c_height + 2)*len(txt.splitlines()) + bottom_pad
         new_wn_width = x_pad*2 + c_width * max_length
 
-        if new_wn_width < WIN['width']:
-            wn_width = WIN['width']
+        if new_wn_width < WIN_CONFIG['width']:
+            wn_width = WIN_CONFIG['width']
         else:
             wn_width = new_wn_width
-        if new_wn_height < WIN['height']:
-            wn_height = WIN['height']
+        if new_wn_height < WIN_CONFIG['height']:
+            wn_height = WIN_CONFIG['height']
         else:
             wn_height = new_wn_height
 
@@ -152,6 +156,7 @@ class Page:
     
     def update_cursor(self, event: tk.Event):
         self.Cursor.update(event)
+
 
 class Cursor:
     def __init__(self, main, x=20, y=10, char=None, page=None, color='green', width = resources.CURSOR['width'], height = resources.CURSOR['height'], text = None):
@@ -366,7 +371,8 @@ class Cursor:
                 self.current_errors += 1
 
         return
-    
+
+
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
