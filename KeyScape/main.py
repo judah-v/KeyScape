@@ -15,8 +15,6 @@ import string
 # add buttons to practice pages to navigate between text segments already 
 # completed
 # 
-# create pause functionality
-# 
 # create graph on home page to compare key accuracy
 # 
 # settings page to adjust line sampling size and other settings
@@ -36,11 +34,11 @@ def setup_user_profile():
 def track_time(func):
     def wrapper(self, *args, **kwargs):
         char = args[0].keysym
-        if char not in resources.NONE_TYPABLES+['BackSpace'] and not self.in_tab:
+        if char not in resources.NONE_TYPABLES+['BackSpace'] and not self.cursor.in_tab:
             stop = time.monotonic()
-            start = self.Page.last_keypress if self.Page.last_keypress else stop
-            self.Page.time_taken += (stop-start)
-            self.Page.last_keypress = stop
+            start = self.last_keypress if self.last_keypress else stop
+            self.time_taken += (stop-start)
+            self.last_keypress = stop
         func(self, *args, **kwargs)
         return 
     return wrapper
@@ -151,14 +149,15 @@ class Page:
         self.collat_cursor = None
         self.displayed_text = self.display_text(text)
         first_char = self.displayed_text.lstrip()[0]
-        self.Cursor = Cursor(self.main, page=self, char=first_char, text=self.displayed_text)
-        self.main.bind('<Key>', self.update_cursor)
+        self.cursor = Cursor(self.main, page=self, char=first_char, text=self.displayed_text)
         self.last_keypress = None
         self.curr_line = 0
         self.error_count = 0
         self.backspace_count = 0
         self.collateral_error_count = 0
         self.key_profiles = get_data(line=3)
+        self.main.bind('<Key>', self.update)
+        self.main.bind('<Motion>', self.pause)
 
 
     def display_text(self, txt: str, bg: str ='', fg: str ='black') -> str:
@@ -189,10 +188,150 @@ class Page:
         text.place(x=x_pad,y=y_pad)
         return txt
 
+    @track_time
+    def update(self, event):
+        page = self
+        key_profiles = self.key_profiles
+        cursor = self.cursor
+        collat_cursor = self.collat_cursor
+        disp_txt_lines = cursor.displayed_text.splitlines()
 
-    def update_cursor(self, event: tk.Event):
-        self.Cursor.update(event)
-    
+        for curs in [cursor, collat_cursor]:
+            if curs and curs.text_pos == len(cursor.typable_text) -1:
+                curs.at_end = True
+                
+        cursor.update_context()
+        if collat_cursor:
+            collat_cursor.update_context()
+        
+        if event.keysym in resources.NONE_TYPABLES:
+            pass
+
+        elif event.keysym == 'Tab':
+            cursor.in_tab = True
+            for i in range(cursor.tab_size):
+                _event = tk.EventType.KeyPress
+                _event.keysym = 'space'
+                _event.char = ' '
+                self.update(_event)
+            cursor.in_tab = False
+
+        elif event.char == cursor.char and cursor.current_errors == 0:
+            key_profiles[cursor.char]['correct'] += 1
+            cursor.color = 'green'
+            cursor.from_backspace = False
+            cursor.text_pos += 1
+            cursor.line_pos += 1
+            cursor.draw(cursor.next_char)
+
+        elif event.char == '\r' and cursor.char == '\n' and cursor.current_errors == 0:
+            cursor.color = 'green'
+            cursor.line += 1
+            cursor.line_pos = 0
+            cursor.text_pos += 1
+            cursor.draw(cursor.next_char)
+
+        elif event.keysym == 'BackSpace':
+            self.backspace_count += 1
+            cursor.at_end = False
+
+            if collat_cursor:
+                collat_cursor.at_end = False
+                
+            if cursor.current_errors == 0 and cursor.text_pos > 0:
+                cursor.line_pos -= 1
+                cursor.text_pos -= 1
+            elif cursor.current_errors > 0:
+                cursor.color = 'red'
+                cursor.draw(cursor.char)
+                print('\n\n\n', cursor.current_errors,'\n\n\n')
+                cursor.current_errors -= 1
+                cursor.from_backspace = True
+                if collat_cursor: 
+                    collat_cursor.current_errors -= 1
+
+            if cursor.prev_char == '\n' and not self.collat_cursor and cursor.text_pos > 0 and not cursor.from_backspace:
+                cursor.line -= 1
+                cursor.line_pos = len(disp_txt_lines[cursor.line])
+
+            if cursor.current_errors == 0:
+                cursor.color = 'green'
+                if cursor.text_pos == 0:
+                    cursor.draw(cursor.typable_text[0])
+
+                else:
+                    cursor.draw(cursor.char if cursor.from_backspace and cursor.text_pos > 0 else cursor.prev_char)
+                    cursor.from_backspace = False
+
+            if cursor.current_errors > 0 and collat_cursor:
+                if cursor.current_errors == 1:
+                    collat_cursor.Frame.destroy()
+                    self.collat_cursor = None
+                elif collat_cursor.prev_char == '\n':
+                    collat_cursor.line -= 1
+                    collat_cursor.line_pos = len(disp_txt_lines[collat_cursor.line]) 
+                    collat_cursor.text_pos -= 1
+                    collat_cursor.draw(collat_cursor.prev_char)
+                else:
+                    collat_cursor.line_pos -= 1
+                    collat_cursor.text_pos -= 1
+                    collat_cursor.draw(collat_cursor.prev_char)
+        
+        else:
+            if cursor.color != 'red':
+                key_profiles[cursor.char]['incorrect'] += 1
+                self.error_count += 1
+                cursor.color = 'red'
+                cursor.draw(cursor.char)
+                
+            
+            if cursor.current_errors == 1 and not cursor.at_end:
+                self.collateral_error_count += 1
+                x = cursor.startpos[0]
+                y = cursor.startpos[1]
+                self.collat_cursor = Cursor(self.main, x=x, y=y, page=page, color='gray', text=self.displayed_text)
+                collat_cursor = self.collat_cursor
+                collat_cursor.text_pos = cursor.text_pos + 1
+                collat_cursor.line = cursor.line
+                collat_cursor.line_pos = cursor.line_pos + 1
+                collat_cursor.current_errors = cursor.current_errors
+                if collat_cursor.text_pos == len(cursor.typable_text) -1:
+                    collat_cursor.at_end = True
+                    collat_cursor.current_errors += 1
+                    cursor.current_errors += 1
+
+                collat_cursor.update_context()
+
+                if collat_cursor.prev_char == '\n':
+                    collat_cursor.line += 1
+                    collat_cursor.line_pos = 0
+
+                collat_cursor.draw(collat_cursor.char)
+
+            elif collat_cursor and not collat_cursor.at_end:
+                self.collateral_error_count += 1
+                if collat_cursor.char == '\n':
+                    collat_cursor.line += 1
+                    collat_cursor.line_pos = 0
+                    
+                else:
+                    collat_cursor.line_pos += 1
+
+                collat_cursor.text_pos += 1
+                collat_cursor.current_errors += 1
+                collat_cursor.draw(collat_cursor.next_char)
+            
+            if cursor.at_end:
+                cursor.current_errors = 1
+            elif (not collat_cursor) or (collat_cursor and not collat_cursor.at_end):
+                cursor.current_errors += 1
+
+        return
+
+    def pause(self, event):
+        self.last_keypress = None
+        self.cursor.color = 'orange'
+        self.cursor.draw(self.cursor.char)
 
     def end_session(self):
         filename = self.main.title()
@@ -201,13 +340,13 @@ class Page:
 
         #find last line number and update user_data.txt
         data = get_data(filename)
-        num_lines = self.Cursor.line+1 if self.Cursor.line+1 < data['segment_size'] else data['segment_size']
+        num_lines = self.cursor.line+1 if self.cursor.line+1 < data['segment_size'] else data['segment_size']
         line_no = data['line_no'] + (num_lines)
         line_data = [filename, {'key': 'line_no','value': line_no}]
         save_data(line_data, line=2)
         save_data(self.key_profiles, line=3)
         
-        tc = len(self.Cursor.typable_text)
+        tc = len(self.cursor.typable_text)
         cps = 1/(self.time_taken/tc)
         wpm = round(cps/5*60)
         mins = int(self.time_taken/60)
@@ -316,139 +455,6 @@ class Cursor:
         return
 
 
-    @track_time
-    def update(self, event):
-        page = self.Page
-        key_profiles = self.Page.key_profiles
-        collat_cursor = page.collat_cursor
-        disp_txt_lines = self.displayed_text.splitlines()
-
-        for curs in [self, collat_cursor]:
-            if curs and curs.text_pos == len(self.typable_text) -1:
-                curs.at_end = True
-                
-        self.update_context()
-        if collat_cursor:
-            collat_cursor.update_context()
-        
-        if event.keysym in resources.NONE_TYPABLES:
-            pass
-
-        elif event.keysym == 'Tab':
-            self.in_tab = True
-            for i in range(self.tab_size):
-                _event = tk.EventType.KeyPress
-                _event.keysym = 'space'
-                _event.char = ' '
-                page.update_cursor(_event)
-            self.in_tab = False
-
-        elif event.char == self.char and self.current_errors == 0:
-            key_profiles[self.char]['correct'] += 1
-            self.color = 'green'
-            self.from_backspace = False
-            self.text_pos += 1
-            self.line_pos += 1
-            self.draw(self.next_char)
-
-        elif event.char == '\r' and self.char == '\n' and self.current_errors == 0:
-            self.color = 'green'
-            self.line += 1
-            self.line_pos = 0
-            self.text_pos += 1
-            self.draw(self.next_char)
-
-        elif event.keysym == 'BackSpace':
-            self.Page.backspace_count += 1
-            self.at_end = False
-
-            if collat_cursor: collat_cursor.at_end = False
-            if self.color == 'green' and self.text_pos > 0:
-                self.line_pos -= 1
-                self.text_pos -= 1
-            elif self.color == 'red':
-                self.current_errors -= 1
-                self.from_backspace = True
-                if collat_cursor: 
-                    collat_cursor.current_errors -= 1
-
-            if self.prev_char == '\n' and not page.collat_cursor and self.text_pos > 0 and not self.from_backspace:
-                self.line -= 1
-                self.line_pos = len(disp_txt_lines[self.line])
-
-            if self.current_errors == 0:
-                self.color = 'green'
-                if self.text_pos == 0:
-                    self.draw(self.typable_text[0])
-
-                else:
-                    self.draw(self.char if self.from_backspace and self.text_pos > 0 else self.prev_char)
-                    self.from_backspace = False
-
-            if self.current_errors > 0 and collat_cursor:
-                if self.current_errors == 1:
-                    collat_cursor.Frame.destroy()
-                    page.collat_cursor = None
-                elif collat_cursor.prev_char == '\n':
-                    collat_cursor.line -= 1
-                    collat_cursor.line_pos = len(disp_txt_lines[collat_cursor.line]) 
-                    collat_cursor.text_pos -= 1
-                    collat_cursor.draw(collat_cursor.prev_char)
-                else:
-                    collat_cursor.line_pos -= 1
-                    collat_cursor.text_pos -= 1
-                    collat_cursor.draw(collat_cursor.prev_char)
-        
-        else:
-            if self.color == 'green':
-                key_profiles[self.char]['incorrect'] += 1
-                self.Page.error_count += 1
-                self.color = 'red'
-                self.draw(self.char)
-                
-            
-            if self.current_errors == 1 and not self.at_end:
-                self.Page.collateral_error_count += 1
-                x = self.startpos[0]
-                y = self.startpos[1]
-                page.collat_cursor = Cursor(page.main, x=x, y=y, page=page, color='gray', text=page.displayed_text)
-                collat_cursor = page.collat_cursor
-                collat_cursor.text_pos = self.text_pos + 1
-                collat_cursor.line = self.line
-                collat_cursor.line_pos = self.line_pos + 1
-                collat_cursor.current_errors = self.current_errors
-                if collat_cursor.text_pos == len(self.typable_text) -1:
-                    collat_cursor.at_end = True
-                    collat_cursor.current_errors += 1
-                    self.current_errors += 1
-
-                collat_cursor.update_context()
-
-                if collat_cursor.prev_char == '\n':
-                    collat_cursor.line += 1
-                    collat_cursor.line_pos = 0
-
-                collat_cursor.draw(collat_cursor.char)
-
-            elif collat_cursor and not collat_cursor.at_end:
-                self.Page.collateral_error_count += 1
-                if collat_cursor.char == '\n':
-                    collat_cursor.line += 1
-                    collat_cursor.line_pos = 0
-                    
-                else:
-                    collat_cursor.line_pos += 1
-
-                collat_cursor.text_pos += 1
-                collat_cursor.current_errors += 1
-                collat_cursor.draw(collat_cursor.next_char)
-            
-            if self.at_end:
-                self.current_errors = 1
-            elif (not collat_cursor) or (collat_cursor and not collat_cursor.at_end):
-                self.current_errors += 1
-
-        return
 
 
 if __name__ == '__main__':
