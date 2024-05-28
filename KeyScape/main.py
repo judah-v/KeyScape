@@ -10,14 +10,12 @@ import string
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# prevent more than one practice page being opened simultaneously
-# 
 # add buttons to practice pages to navigate between text segments already 
 # completed
 # 
-# create graph on home page to compare key accuracy
+# create link to key accuracy graph on home page
 # 
-# settings page to adjust line sampling size and other settings
+# settings page to adjust line sampling size 
 #-------------------------------------------------------------------------------
 
 def setup_user_profile():
@@ -81,10 +79,11 @@ def get_data(filename = '', line = 2):
 
 class App:
     def __init__(self):
-        self.Home = Page('KeyScape', app=self, kind='home')
+        self.Home = Page('KeyScape', app=self, kind='home_page')
+        self.current_pages = [self.Home]
         return
      
-    def create_page(self, filename: str):
+    def create_practice_page(self, filename: str):
         name = filename
         sources = resources.SOURCES
         self.curr_line = sources[name][1]['line_no']
@@ -98,14 +97,21 @@ class App:
             save_data(line_data, line=2)
             selection = lines[curr_line:curr_line + resources.SAMPLE_SIZE]
             txt = ''.join(selection)
-            self.CurrentPage = Page(name, txt) # fix this. too ambiguous           
+            for page in self.current_pages:
+                if page.name == name:
+                    page.main.deiconify()
+                    return
+            new_page = Page(name, txt, app=self)
+            self.current_pages.append(new_page)
+            new_page.main.focus_force()
+
         except IndexError:
             print('You have hit the end of the file.')
             restart = mb.askokcancel('lesson completed', "You have completed the lesson. Would you like restart?")
             if restart:
                 line_data = [name, {'key': 'line_no', 'value': 0}]
                 save_data(line_data, line=2)
-                self.create_page(filename)
+                self.create_practice_page(filename)
                 return
             
         return 
@@ -118,19 +124,24 @@ class Page:
     def __init__(self, title: str, 
                  text: str ='', 
                  app: App =None,
-                 kind: str ='text', 
-                 geometry=f"{resources.WIN_CONFIG['width']}x{resources.WIN_CONFIG['height']}+{resources.WIN_CONFIG['x']}+{resources.WIN_CONFIG['y']}", 
-                 name='typing_page', dimensions=(resources.WIN_CONFIG['min_width'],
+                 kind: str ='typing_page', 
+                 geometry=f"{resources.WIN_CONFIG['width']}x{resources.WIN_CONFIG['height']}+{resources.WIN_CONFIG['x']}+{resources.WIN_CONFIG['y']}",
+                 dimensions=(resources.WIN_CONFIG['min_width'],
                  resources.WIN_CONFIG['min_height'])):
-        main = tk.Tk(name)
+        
+        main = tk.Tk(kind)
         main.title(title)
         main.minsize(*dimensions)
         main.geometry(geometry)
+        main.protocol('WM_DELETE_WINDOW', self.close)
         self.main = main
-        if kind == 'home':
-            self.App = app
+        self.name = title
+        self.kind = kind
+        self.App = app
+
+        if self.kind == 'home_page':
             self.start_homepage()
-        elif kind == 'text':
+        elif self.kind == 'typing_page':
             self.start_practicepage(text)
         return
     
@@ -138,7 +149,7 @@ class Page:
     def start_homepage(self):
         sources = resources.SOURCES
         for source in sources:
-            btn = tk.Button(self.main, text=source, command=lambda: self.App.create_page(source))
+            btn = tk.Button(self.main, text=source, command=lambda: self.App.create_practice_page(source))
             btn.place(x=50, y=50)
         return
     
@@ -243,12 +254,11 @@ class Page:
                 cursor.text_pos -= 1
             elif cursor.current_errors > 0:
                 cursor.color = 'red'
-                cursor.draw(cursor.char)
-                print('\n\n\n', cursor.current_errors,'\n\n\n')
                 cursor.current_errors -= 1
                 cursor.from_backspace = True
                 if collat_cursor: 
                     collat_cursor.current_errors -= 1
+                cursor.draw(cursor.char)
 
             if cursor.prev_char == '\n' and not self.collat_cursor and cursor.text_pos > 0 and not cursor.from_backspace:
                 cursor.line -= 1
@@ -328,15 +338,19 @@ class Page:
 
         return
 
+
     def pause(self, event):
         self.last_keypress = None
         self.cursor.color = 'orange'
         self.cursor.draw(self.cursor.char)
 
+
     def end_session(self):
-        filename = self.main.title()
+        filename = self.name
         self.main.destroy()
         self.main = None
+        self.App.current_pages.remove(self)
+        self.App.Home.main.deiconify()
 
         #find last line number and update user_data.txt
         data = get_data(filename)
@@ -374,6 +388,15 @@ Best key: {best_key}
 Worst key: {worst_key}
 '''
         print(summary)
+
+
+    def close(self):
+        if self.kind == 'home_page':
+            for page in self.App.current_pages:
+                page.main.destroy()
+        else:
+            self.App.current_pages.remove(self)
+            self.main.destroy()
 
 
 class Cursor:
