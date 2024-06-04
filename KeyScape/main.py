@@ -11,6 +11,9 @@ import string
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
+# add a way to see the best and worst keys from current session as well as overall perfomance
+# 
+# stop navigation buttons from showing up when pressing them won't do anything
 # 
 # add numbering for lines
 # 
@@ -570,6 +573,7 @@ class Cursor:
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
+    
     os.system('type main.py > sample.txt')
     app = App()
     app.run()

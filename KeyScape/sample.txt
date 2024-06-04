@@ -11,14 +11,10 @@ import string
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# add buttons to practice pages to navigate between text segments already 
-# completed
 # 
 # add numbering for lines
 # 
 # create link to key accuracy graph on home page
-# 
-# create finishing popup page to display results instead of printing them out
 # 
 # create settings page to adjust line sampling size 
 #-------------------------------------------------------------------------------
@@ -390,9 +386,6 @@ class Page:
 
 
     def end_session(self):
-        # TODO: allow summary window to let the user to choose wether to type the next section in line without jumping to the furthest progressed if they went back to type previous sections or go straight to the end
-
-
         #find last line number and update user_data.txt
         data = get_data(line=2)
         lines_typed = min((self.cursor.line+1), data['sample_size'])
@@ -577,6 +570,7 @@ class Cursor:
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
+    setup_user_profile()
     os.system('type main.py > sample.txt')
     app = App()
     app.run()
