@@ -13,11 +13,9 @@ import string
 # 
 # add a way to see the best and worst keys from current session as well as overall perfomance
 # 
-# stop navigation buttons from showing up when pressing them won't do anything
-# 
 # add numbering for lines
 # 
-# create link to key accuracy graph on home page
+# create link to a key accuracy graph on home page
 # 
 # create settings page to adjust line sampling size 
 #-------------------------------------------------------------------------------
@@ -96,6 +94,7 @@ class App:
         self.current_pages = {'Home': self.Home}
         return
     
+
     def setup_homepage(self, page):
         def get_command_func(filename):
             def func():
@@ -106,6 +105,7 @@ class App:
             btn.grid() # TODO: Fix appearance
         return
     
+
     def initialize_typing_page(self, page, text):
         page.time_taken = 0
         page.collat_cursor = None
@@ -120,7 +120,7 @@ class App:
         page.key_profiles = get_data(line=3)
         return
     
-    
+
     def create_typing_page(self, filename: str, save = True):
         self.curr_line = resources.DATA['line_numbers'][filename]
         curr_line = self.curr_line
@@ -156,6 +156,7 @@ class App:
             
         return
     
+
     def setup_typing_page(self, page):
         filename = page.name
         
@@ -165,25 +166,38 @@ class App:
                 curr_line = resources.DATA['line_numbers'][filename]
                 curr_line = get_selection(filename, curr_line)[1]
                 target_line = curr_line + resources.SAMPLE_SIZE*page.flips
-                page.flips = 0 if target_line > curr_line else page.flips
                 target_line = min(curr_line, target_line)
+
+                target_line = 0 if target_line < 0 else target_line
+                page.flips = 0 if target_line > curr_line else page.flips
+                
                 self.change_typing_page(page, target_line)
             return flip_page
         
         btn_bar = tk.Frame(page.main)
-        prev_btn = tk.Button(btn_bar, text='Previous page', command=get_flip_page_func(page))
-        nxt_btn = tk.Button(btn_bar, text='Next page', command=get_flip_page_func(page, turns=1)) # add command=
-        prev_btn.pack(side='left', padx=15, pady=10)
-        nxt_btn.pack(side='right', padx=15, pady=10)
+        page.prev_btn = tk.Button(btn_bar, text='Previous page', command=get_flip_page_func(page), takefocus=False)
+        page.next_btn = tk.Button(btn_bar, text='Next page', command=get_flip_page_func(page, turns=1), takefocus=False)
+        curr_line = get_data(2)['line_numbers'][page.name]
+
+        if curr_line != 0:
+            page.prev_btn.pack(side='left', padx=15, pady=10)
+
         btn_bar.pack(side='bottom', fill='x')
+
 
     def change_typing_page(self, page, line_no):
         page.cursor.destroy()
+        if page.collat_cursor:
+            page.collat_cursor.destroy()
         txt, curr_line = get_selection(page.name, line_no)
+        
+        page.next_btn.pack_forget() if page.flips == 0 else page.next_btn.pack(side='right', padx=15, pady=10)
+        page.prev_btn.pack_forget() if curr_line == 0 else page.prev_btn.pack(side='left', padx=15, pady=10)
+        
         self.initialize_typing_page(page, txt)
         page.textLabel['text'] = txt
-        # save new data to file (prevent user from skipping to sections they haven't typed yet)
-    
+
+
     def run(self):
         return self.Home.main.mainloop()
 
@@ -471,7 +485,6 @@ Worst key: {worst_key}
             summary_page.main.bind('<Right>', func=get_review_next_lesson_func(summary_page, target_line))
 
 
-
     def close(self):
         self.main.destroy()
         self.App.current_pages.pop(self.name)
@@ -504,16 +517,13 @@ class Cursor:
         self.char_label.place(x=-3,y=-5)
         return
 
-
     @property
     def x(self):
         return self.line_pos * self.width + self.pos[0]
 
-
     @property
     def y(self):
         return self.line * (self.height + 2) + self.pos[1]
-
 
     @property
     def line_pos(self):
@@ -562,6 +572,7 @@ class Cursor:
             self.char_label.config(text=self.char, bg=self.color)
 
         return
+
 
     def destroy(self):
         self.Frame.destroy()
