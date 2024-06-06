@@ -15,6 +15,8 @@ import string
 # 
 # add numbering for lines
 # 
+# add enter key to key accuracy calculations
+# 
 # create link to a key accuracy graph on home page
 # 
 # create settings page to adjust line sampling size 
@@ -469,7 +471,6 @@ class Page:
                 if scores[key] < scores[worst_key]:
                     worst_key = key
             
-        print(scores)
         summary = f'''
         
 Total Characters: {tc}
