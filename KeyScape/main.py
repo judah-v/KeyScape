@@ -418,18 +418,58 @@ class Page:
         mins = int(self.time_taken/60)
         secs = round(self.time_taken % 60)
         ukp = (self.error_count + self.collateral_error_count + self.backspace_count) / tc
-        best_key = '0'
-        worst_key = '0'
+
+        #possible function below?
         keys = list(self.key_profiles.keys())
         keys.remove(' ')
         keys.remove('\n')
+        best_key = '0'
+        worst_key = '0'
+        scores = {}
+        perfect_scores = 0
+        bottom_scores = 0
         for char in keys:
-            if self.key_profiles[char]['correct'] > self.key_profiles[best_key]['correct']:
-                best_key = char
+                incorrect = self.key_profiles[char]['incorrect']
+                correct = self.key_profiles[char]['correct']
+                try:
+                    if incorrect == 0:
+                        scores[char] = 1
+                        perfect_scores += 1
+                    else:
+                        scores[char] = 1 - incorrect/correct
+                except ZeroDivisionError:
+                    scores[char] = 0
+                    bottom_scores += 1
         
-        for char in keys:
-            if self.key_profiles[char]['incorrect'] > self.key_profiles[worst_key]['incorrect']:
-                worst_key = char
+        if perfect_scores > 1:
+            best_key = '0'
+            best_score = 0
+            for key in scores:
+                if scores[key] == 1:
+                    score = self.key_profiles[key]['correct']
+                    if score > best_score:
+                        best_key = key
+                        best_score = score
+        else:
+            for key in scores:
+                if scores[key] > scores[best_key]:
+                    best_key = key
+
+        if bottom_scores > 1:
+            worst_key = '0'
+            worst_score = scores['0']
+            for key in scores:
+                if scores[key] == 0:
+                    score = self.key_profiles[key]['incorrect']
+                    if score < worst_score:
+                        worst_key = key
+                        worst_score = score
+        else:
+            for key in scores:
+                if scores[key] < scores[worst_key]:
+                    worst_key = key
+            
+        print(scores)
         summary = f'''
         
 Total Characters: {tc}
@@ -450,10 +490,15 @@ Best key: {best_key}
 
 Worst key: {worst_key}
 '''
+        self.create_summary_page(summary)
+
+    def create_summary_page(self, summary):
+        data = get_data(2)
         def close_both(summary_page):
-            def func():
+            def func(event=None):
                 summary_page.close()
                 self.App.current_pages[summary_page.original_page.name].close()
+                
             return func
         
         def get_start_next_lesson_func(summary_page):
@@ -478,6 +523,7 @@ Worst key: {worst_key}
         btn = tk.Button(summary_page.main, text="Next Lesson", command=get_start_next_lesson_func(summary_page))
         btn.pack(side='bottom', pady=10)
         summary_page.main.bind('<Return>', func=get_start_next_lesson_func(summary_page))
+        summary_page.main.bind('<Escape>',func= close_both(summary_page))
 
         if self.flips != 0:
             self.flips += 1
@@ -494,6 +540,7 @@ Worst key: {worst_key}
             
         elif self.kind == 'typing_page' and 'Home' in self.App.current_pages:
             self.App.current_pages['Home'].main.deiconify()
+
 
 
 
