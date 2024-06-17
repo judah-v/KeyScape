@@ -3,7 +3,7 @@ from importlib import reload # imports a specific function, reload, from the 'im
 import tkinter as tk
 import tkinter.messagebox as mb
 import os
-import resources 
+import resources # this is actually the name of another .py file I wrote and placed in the same folder. I can use the definitions, functions, and classes in it just like any other module I import.
 import time
 import string
 
@@ -33,10 +33,10 @@ def setup_user_profile():
         #       
         #        file = open(filename, mode, ...)
         #
-        # the difference is that a 'with..as' statement automatically closes the file stream so I don't need to do it manually -by calling file.close()
+        # the difference is that a 'with..as' statement automatically closes the file stream so I don't need to do it manually by calling file.close()
 
         fnames, l_data, profile = [eval(line) for line in file.readlines()]
-        # this line is the same as:
+        # ^ this line is the same as:
         #           
         #           my_list = []
         #           for line in file.readlines():
@@ -48,12 +48,36 @@ def setup_user_profile():
         #           profile = my_list[2]
         #         
         # basically, when you have more than one name on the left of the '=', python automatically assumes you want to split the items on the other side of the '=' and assigns the first to the first, the second to the second etc...
-        for char in string.printable.replace('\r\x0b\x0c', ''):
-            profile[char] = {'correct': 0, 'incorrect': 0}
-        content = f'{repr(fnames)}\n{repr(l_data)}\n{repr(profile)}'
-        file.seek(0)
-        file.write(content)
-        file.truncate()
+        # 
+        # eval is another builtin function that runs string through python like it's actually code.. so eval('x = 0') would be the same as x = 0
+        # I use it as a shortcut so I can get the info directly into a dictionary object
+
+        for char in string.printable.replace('\r\x0b\x0c', ''): 
+            # loops through a string with every character you can type on an english keyboard
+            profile[char] = {'correct': 0, 'incorrect': 0} # resets scores
+
+        content = f'{fnames}\n{l_data}\n{profile}'
+        # this is a formatted string... it's similar to "".format(). It replaces the expressions in curly braces with their string values
+        # (basically shorthand for a + "some text" + b + "some more text")
+        file.seek(0) 
+        # when I called file.readlines() on line 38, python left the 'cursor' at the end of the file. I want it at the beginning so I can start writing at the top. The seek function moves the cursor to the index position i pass it (0)
+        
+        file.write(content) # self explanatory
+        file.truncate() 
+        # when I'm writing into a file with text, if the cursor isn't at the end, what I'm actually doing is replacint existing text... so if what I want to write is shorter than what's already there, I need to cut off the remaining characters. That's what file.truncate() does.
+        # eg: the file has one line with 5 characters:
+        # 
+        #            hello
+        # 
+        # if were to do file.write('pie'), I would get this:
+        #
+        #            pielo
+        #
+        # truncate cuts off the remaining 'lo' left over from the original text in the file so I have:
+        # 
+        #            pie
+
+    # normally, after writing to a file, I need to close it, but my with statement does that for me
 
 
 def track_time(func):
