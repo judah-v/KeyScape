@@ -27,7 +27,7 @@ def setup_user_profile():
         fnames, l_data, profile = [eval(line) for line in file.readlines()]
         for char in string.printable.replace('\r\x0b\x0c', ''):
             profile[char] = {'correct': 0, 'incorrect': 0}
-        content = f'{repr(fnames)}\n{repr(l_data)}\n{repr(profile)}'
+        content = f'{fnames}\n{l_data}\n{profile}'
         file.seek(0)
         file.write(content)
         file.truncate()
@@ -493,6 +493,7 @@ Worst key: {worst_key}
 '''
         self.create_summary_page(summary)
 
+
     def create_summary_page(self, summary):
         data = get_data(2)
         def close_both(summary_page):
@@ -541,8 +542,6 @@ Worst key: {worst_key}
             
         elif self.kind == 'typing_page' and 'Home' in self.App.current_pages:
             self.App.current_pages['Home'].main.deiconify()
-
-
 
 
 class Cursor:
@@ -632,7 +631,6 @@ class Cursor:
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
-    
     os.system('type main.py > sample.txt')
     app = App()
     app.run()
