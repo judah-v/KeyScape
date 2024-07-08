@@ -11,15 +11,17 @@ import string
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# add a way to see the best and worst keys from current session as well as overall perfomance
-# 
-# add numbering for lines
+# add a way to see the best and worst keys from current session as well as 
+# overall perfomance
 # 
 # add enter key to key accuracy calculations
 # 
 # create link to a key accuracy graph on home page
 # 
 # create settings page to adjust line sampling size 
+# 
+# add 'type a book' feature to scrape chapters from readnovelfull and insert 
+# them into files to type
 #-------------------------------------------------------------------------------
 
 def setup_user_profile():
@@ -71,21 +73,31 @@ def get_data(line):
     return [filenames, s_data, err_profile][line]
 
 
+def get_line_numbers(page, curr_line):
+    line_numbers = ''
+    if page.kind == 'typing_page':
+        for line in range(resources.SAMPLE_SIZE):
+            line_numbers += f'{curr_line + line:2}\n'
+    return line_numbers[:-1]
+
+
 def get_selection(filename, curr_line, direction=''):
+    curr_line -= 1
     sources = resources.SOURCES
-    sample_size = resources.DATA['sample_size']
+    sample_size = resources.EDITOR_DATA['settings']['sample_size']
     lines = open(sources[filename], encoding="UTF-8").readlines()
     selection = ''
     while lines[curr_line].lstrip(' ') == '\n':
-        if direction == 'back':
-            curr_line -= 1
-            selection = lines[curr_line - sample_size:curr_line]
-        else:
-            curr_line += 1
+        curr_line -= 1
+        selection = lines[curr_line - sample_size:curr_line]
     
     selection = lines[curr_line:curr_line + sample_size] if not selection else selection
     txt = ''.join(selection)
-    return (txt, curr_line)
+    txt = txt.replace('’',"'")
+    # Stop chaos from reigning(both symbols mean the same thing but are 
+    # technically different characters and the first isn't found on 
+    # keyboards, so it's impossible to type...)
+    return (txt, curr_line+1)
 
 
 class App:
@@ -108,12 +120,10 @@ class App:
         return
     
 
-    def initialize_typing_page(self, page, text):
+    def initialize_typing_page(self, page):
         page.time_taken = 0
         page.collat_cursor = None
-        page.displayed_text = page.display_text(text)
-        first_char = page.displayed_text.lstrip()[0]
-        page.cursor = Cursor(page, char=first_char)
+        page.displayed_text = None
         page.last_keypress = None
         page.curr_line = 0
         page.error_count = 0
@@ -124,7 +134,7 @@ class App:
     
 
     def create_typing_page(self, filename: str, save = True):
-        self.curr_line = resources.DATA['line_numbers'][filename]
+        self.curr_line = resources.EDITOR_DATA['line_numbers'][filename]
         curr_line = self.curr_line
 
         try:
@@ -142,8 +152,8 @@ class App:
             new_page.main.bind('<Key>', new_page.update)
             new_page.main.bind('<Motion>', new_page.pause)
             new_page.flips = 0
-            self.initialize_typing_page(new_page, txt)
-            self.setup_typing_page(new_page)
+            self.initialize_typing_page(new_page)
+            self.setup_typing_page(new_page, txt)
             self.current_pages[filename] = new_page
             new_page.main.focus_force()
 
@@ -151,37 +161,43 @@ class App:
             restart = mb.askokcancel('lesson completed', "You have completed the lesson. Would you like restart?")
             if restart:
                 data = get_data(line=2)
-                data['line_numbers'][filename] = 0
+                data['line_numbers'][filename] = 1
                 save_data(data, line=2)
-                self.initialize_typing_page(filename)
+                self.create_typing_page(filename)
                 return
             
         return
     
 
-    def setup_typing_page(self, page):
+    def setup_typing_page(self, page, text):
+        page.display_text(text)
+        first_char = text.lstrip()[0]
+        page.cursor = Cursor(page, char=first_char)
+
         filename = page.name
         
-        def get_flip_page_func(page, turns=-1):
-            def flip_page():
+        def get_flip_page_func(page, turns=1):
+            def flip_page(event = None):
                 page.flips += turns
-                curr_line = resources.DATA['line_numbers'][filename]
+                curr_line = resources.EDITOR_DATA['line_numbers'][filename]
                 curr_line = get_selection(filename, curr_line)[1]
-                target_line = curr_line + resources.SAMPLE_SIZE*page.flips
-                target_line = min(curr_line, target_line)
-
-                target_line = 0 if target_line < 0 else target_line
-                page.flips = 0 if target_line > curr_line else page.flips
-                
+                target_line = min(curr_line, (curr_line - resources.SAMPLE_SIZE*page.flips))
+                if target_line == curr_line:
+                    page.flips = 0
+                if target_line < 1:
+                    target_line = 1
+                    page.flips -= 1
                 self.change_typing_page(page, target_line)
             return flip_page
         
         btn_bar = tk.Frame(page.main)
         page.prev_btn = tk.Button(btn_bar, text='Previous page', command=get_flip_page_func(page), takefocus=False)
-        page.next_btn = tk.Button(btn_bar, text='Next page', command=get_flip_page_func(page, turns=1), takefocus=False)
+        page.next_btn = tk.Button(btn_bar, text='Next page', command=get_flip_page_func(page, turns=-1), takefocus=False)
         curr_line = get_data(2)['line_numbers'][page.name]
+        page.main.bind('<Left>', func=get_flip_page_func(page))
+        page.main.bind('<Right>', func=get_flip_page_func(page, turns=-1))
 
-        if curr_line != 0:
+        if curr_line != 1:
             page.prev_btn.pack(side='left', padx=15, pady=10)
 
         btn_bar.pack(side='bottom', fill='x')
@@ -194,10 +210,15 @@ class App:
         txt, curr_line = get_selection(page.name, line_no)
         
         page.next_btn.pack_forget() if page.flips == 0 else page.next_btn.pack(side='right', padx=15, pady=10)
-        page.prev_btn.pack_forget() if curr_line == 0 else page.prev_btn.pack(side='left', padx=15, pady=10)
+        page.prev_btn.pack_forget() if curr_line == 1 else page.prev_btn.pack(side='left', padx=15, pady=10)
         
-        self.initialize_typing_page(page, txt)
+        line_numbers = get_line_numbers(page, curr_line)
+        self.initialize_typing_page(page)
+
         page.textLabel['text'] = txt
+        page.lineLabel['text'] = line_numbers
+        page.displayed_text = txt
+        page.cursor = Cursor(page, char=txt.lstrip()[0])
 
 
     def run(self):
@@ -220,7 +241,7 @@ class Page:
         self.main = main
         self.name = title
         self.kind = kind
-        self.textLabel = None
+        self.textLabel, self.lineLabel = None, None
         self.App = app
         self.main.bind('<Escape>', lambda event: self.close())
 
@@ -228,30 +249,38 @@ class Page:
     
 
     def display_text(self, txt: str, bg: str ='', fg: str ='black') -> str:
+        
         WIN_CONFIG = resources.WIN_CONFIG
         CURSOR = resources.CURSOR
-        max_length = max([len(line) for line in txt.splitlines()])
+        txt_lines = txt.splitlines()
+        max_length = max([len(line) for line in txt_lines])
         x_pad = WIN_CONFIG['x_padding']
         y_pad = WIN_CONFIG['y_padding']
         bottom_pad = WIN_CONFIG['bottom_padding']
         c_width = CURSOR['width']
         c_height = CURSOR['height']
-        new_wn_height = y_pad + (c_height + 2)*len(txt.splitlines()) + bottom_pad
-        new_wn_width = x_pad*2 + c_width * max_length
-
+        new_wn_height = y_pad + (c_height + 2)*len(txt_lines) + bottom_pad
+        new_wn_width = x_pad*2 + c_width * (max_length + 4)
         wn_width = max([new_wn_width, WIN_CONFIG['width']])
         wn_height = max([new_wn_height, WIN_CONFIG['height']])
 
         self.main.geometry(f'{wn_width}x{wn_height}')
         self.main.minsize(new_wn_width, new_wn_height)
         bg = self.main['bg'] if bg == '' else bg
+        if self.kind == 'typing_page':
+            curr_line = resources.EDITOR_DATA['line_numbers'][self.name]
+            line_numbers = get_line_numbers(self, curr_line)
+            self.lineLabel = tk.Label(self.main, text=line_numbers, font='courier 10', justify='left', bg=bg, fg='grey')
+            self.lineLabel.place(x=x_pad, y=y_pad)
+            self.lineLabel.update()
 
-        if self.textLabel:
-            self.textLabel['text'] = txt
-        else:
+        if not self.textLabel:
             self.textLabel = tk.Label(self.main, text=txt, font='courier 10', justify='left', bg=bg, fg=fg)
-            self.textLabel.place(x=x_pad, y=y_pad)
-        return txt
+        
+        label_x_pad = x_pad if not self.lineLabel else x_pad+self.lineLabel.winfo_width()
+        self.textLabel.place(x=label_x_pad, y=y_pad)
+        self.displayed_text = txt
+        return
 
     @track_time
     def update(self, event):
@@ -266,13 +295,7 @@ class Page:
                 
         cursor.update_context()
         if collat_cursor:
-            collat_cursor.update_context()
-        
-        if cursor.char == '’' and event.char == "'": 
-            cursor.char = "'"
-            # Stop chaos from reigning(both symbols mean the same thing but are 
-            # technically different characters and the first isn't found on 
-            # keyboards, so it's impossible to type...)
+            collat_cursor.update_context()       
 
         if event.keysym in resources.NONE_TYPABLES:
             pass
@@ -399,15 +422,18 @@ class Page:
 
 
     def pause(self, event):
-        self.last_keypress = None
-        self.cursor.color = 'orange'
-        self.cursor.draw(self.cursor.char)
+        try:
+            self.last_keypress = None
+            self.cursor.color = 'orange'
+            self.cursor.draw(self.cursor.char)
+        except AttributeError:
+            pass
 
 
     def end_session(self):
         #find last line number and update user_data.txt
         data = get_data(line=2)
-        lines_typed = min((self.cursor.line+1), data['sample_size'])
+        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
         if self.flips == 0:
             self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
             data['line_numbers'][self.name] += (lines_typed)
@@ -496,16 +522,15 @@ Worst key: {worst_key}
 
     def create_summary_page(self, summary):
         data = get_data(2)
-        def close_both(summary_page):
+        def close_orig_page(summary_page):
             def func(event=None):
                 summary_page.close()
                 self.App.current_pages[summary_page.original_page.name].close()
-                
             return func
         
         def get_start_next_lesson_func(summary_page):
             def start_next_lesson(event=None):
-                close_both(summary_page)()
+                close_orig_page(summary_page)()
                 self.App.create_typing_page(self.name)
             return start_next_lesson
 
@@ -513,23 +538,24 @@ Worst key: {worst_key}
             def review_next_lesson(event=None):
                 summary_page.close()
                 self.App.change_typing_page(self, target_line)
+                self.flips -= 1
             return review_next_lesson
         
         
         summary_page = Page('Summary', self.App, 'summary_page', "100x100+100+100")
         summary_page.original_page = self
         summary_page.display_text(summary)
-        summary_page.main.protocol('WM_DELETE_WINDOW', close_both(summary_page))
+        summary_page.main.protocol('WM_DELETE_WINDOW', close_orig_page(summary_page))
         summary_page.main.focus_force()
         self.App.current_pages[summary_page.name] = summary_page
         btn = tk.Button(summary_page.main, text="Next Lesson", command=get_start_next_lesson_func(summary_page))
         btn.pack(side='bottom', pady=10)
         summary_page.main.bind('<Return>', func=get_start_next_lesson_func(summary_page))
-        summary_page.main.bind('<Escape>',func= close_both(summary_page))
+        summary_page.main.bind('<Escape>',func= close_orig_page(summary_page))
 
         if self.flips != 0:
-            self.flips += 1
-            target_line = data['line_numbers'][self.name] + resources.SAMPLE_SIZE*self.flips
+            
+            target_line = int(self.lineLabel['text'][:2]) + resources.SAMPLE_SIZE
             summary_page.main.bind('<Right>', func=get_review_next_lesson_func(summary_page, target_line))
 
 
@@ -566,7 +592,7 @@ class Cursor:
 
     @property
     def x(self):
-        return self.line_pos * self.width + self.pos[0]
+        return self.line_pos * self.width + self.pos[0] +  + self.Page.lineLabel.winfo_width()
 
     @property
     def y(self):
