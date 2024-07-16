@@ -1,4 +1,16 @@
-#
+#---------------------------------NOTEPAD---------------------------------------
+# practice idea: use network ports and another client application to view typing
+#                practice sessions in real time
+# 
+# add settings page where user can add a new file to read from
+# 
+# create link to a key accuracy graph on home page
+# 
+# add 'type a book' feature to scrape chapters from readnovelfull and insert 
+# them into files to type
+#-------------------------------------------------------------------------------
+
+
 from importlib import reload
 import tkinter as tk
 import tkinter.messagebox as mb
@@ -7,22 +19,6 @@ import resources
 import time
 import string
 
-#---------------------------------NOTEPAD---------------------------------------
-# practice idea: use network ports and another client application to view typing
-#                practice sessions in real time
-# 
-# add a way to see the best and worst keys from current session as well as 
-# overall perfomance
-# 
-# add enter key to key accuracy calculations
-# 
-# create link to a key accuracy graph on home page
-# 
-# create settings page to adjust line sampling size 
-# 
-# add 'type a book' feature to scrape chapters from readnovelfull and insert 
-# them into files to type
-#-------------------------------------------------------------------------------
 
 def setup_user_profile():
     with open(resources.data_filename, 'r+', encoding='utf-8') as file:
@@ -48,7 +44,7 @@ def track_time(func):
     return wrapper
 
 
-def save_data(new_data, line):
+def save_data(new_data, line=None):
     '''
     data -> [index, new_value]
     index = index of data in tuple in format (line number, number of lines per segment)
@@ -57,7 +53,10 @@ def save_data(new_data, line):
     with open(resources.data_filename, 'r+',encoding="UTF-8") as file:
         filenames, line_data, user_profile = [eval(l) for l in file.readlines()]
         content = [filenames, line_data, user_profile]
-        content[line-1] = new_data
+        if line:
+            content[line-1] = new_data
+        else:
+            content = new_data
         content = '{0}\n{1}\n{2}'.format(*content)
         file.seek(0)
         file.write(content)
@@ -65,12 +64,16 @@ def save_data(new_data, line):
     reload(resources)
 
 
-def get_data(line):
-    line -= 1
+def get_data(line = None):
+    if line:
+        line -= 1
     with open(resources.data_filename, encoding='utf-8') as file:
         filenames, s_data, err_profile = [eval(line) for line in file.readlines()]
         
-    return [filenames, s_data, err_profile][line]
+    if line:
+        return [filenames, s_data, err_profile][line]
+    else:
+        return [filenames, s_data, err_profile]
 
 
 def get_line_numbers(page, curr_line):
@@ -117,8 +120,27 @@ class App:
         for filename in resources.SOURCES.keys():
             btn = tk.Button(page.main, text=filename, command=get_command_func(filename))
             btn.grid() # TODO: Fix appearance
+        settings_btn = tk.Button(page.main, text='Settings', command=self.start_settings_page)
+        settings_btn.grid()
         return
     
+    def start_settings_page(self):
+        def save_settings(event):
+            s_data = get_data(2)
+            s_data['settings']['sample_size'] = int(sample_size.get())
+            save_data(s_data, 2)
+            settings_page.close()
+
+        settings_page = Page('Settings', app=self, kind='settings_page')
+        self.current_pages['Settings'] = settings_page
+        sample_size = tk.StringVar(settings_page.main)
+        sample_size_lbl = tk.Label(settings_page.main, text='Sample Size: ')
+        sample_size_eb = tk.Entry(settings_page.main, textvariable=sample_size, width=5, justify='center')
+        sample_size_eb.bind('<Return>', func=save_settings)
+        sample_size.set(str(resources.SAMPLE_SIZE))
+        sample_size_lbl.pack()
+        sample_size_eb.pack()
+
 
     def initialize_typing_page(self, page):
         page.time_taken = 0
@@ -133,16 +155,15 @@ class App:
         return
     
 
-    def create_typing_page(self, filename: str, save = True):
+    def create_typing_page(self, filename: str):
         self.curr_line = resources.EDITOR_DATA['line_numbers'][filename]
         curr_line = self.curr_line
 
         try:
             txt, curr_line = get_selection(filename, curr_line)
-            if save:
-                data = get_data(line=2)
-                data['line_numbers'][filename] = curr_line
-                save_data(data, line=2)
+            data = get_data(line=2)
+            data['line_numbers'][filename] = curr_line
+            save_data(data, line=2)
             for page in self.current_pages:
                 if self.current_pages[page].name == filename: # Prevents duplicate windows
                     self.current_pages[page].main.deiconify()
@@ -433,7 +454,7 @@ class Page:
     def end_session(self):
         #find last line number and update user_data.txt
         data = get_data(line=2)
-        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
+        lines_typed = min((self.cursor.line), data['settings']['sample_size'])
         if self.flips == 0:
             self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
             data['line_numbers'][self.name] += (lines_typed)
@@ -450,7 +471,6 @@ class Page:
         #possible function below?
         keys = list(self.key_profiles.keys())
         keys.remove(' ')
-        keys.remove('\n')
         best_key = '0'
         worst_key = '0'
         scores = {}
@@ -496,7 +516,11 @@ class Page:
             for key in scores:
                 if scores[key] < scores[worst_key]:
                     worst_key = key
-            
+        
+
+        for key in best_key, worst_key:
+            if key == '\n':
+                key = 'Enter'
         summary = f'''
         
 Total Characters: {tc}
@@ -521,7 +545,7 @@ Worst key: {worst_key}
 
 
     def create_summary_page(self, summary):
-        data = get_data(2)
+        
         def close_orig_page(summary_page):
             def func(event=None):
                 summary_page.close()
@@ -562,11 +586,12 @@ Worst key: {worst_key}
     def close(self):
         self.main.destroy()
         self.App.current_pages.pop(self.name)
+
         if self.kind == 'home_page':
             for page in list(self.App.current_pages.keys()):
                 self.App.current_pages[page].close()
             
-        elif self.kind == 'typing_page' and 'Home' in self.App.current_pages:
+        elif self.kind in ['summary_page', 'settings_page'] and 'Home' in self.App.current_pages:
             self.App.current_pages['Home'].main.deiconify()
 
 
