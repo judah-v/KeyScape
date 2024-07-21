@@ -2,7 +2,9 @@
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# add settings page where user can add a new file to read from
+# make it so that you don't have to restart the app to see newly added files
+# 
+# improve app layout and graphic design
 # 
 # create link to a key accuracy graph on home page
 # 
@@ -51,8 +53,8 @@ def save_data(new_data, line=None):
     '''
 
     with open(resources.data_filename, 'r+',encoding="UTF-8") as file:
-        filenames, line_data, user_profile = [eval(l) for l in file.readlines()]
-        content = [filenames, line_data, user_profile]
+        filenames, user_data, err_profile = [eval(l) for l in file.readlines()]
+        content = [filenames, user_data, err_profile]
         if line:
             content[line-1] = new_data
         else:
@@ -68,12 +70,12 @@ def get_data(line = None):
     if line:
         line -= 1
     with open(resources.data_filename, encoding='utf-8') as file:
-        filenames, s_data, err_profile = [eval(line) for line in file.readlines()]
+        filenames, user_data, err_profile = [eval(line) for line in file.readlines()]
         
     if line:
-        return [filenames, s_data, err_profile][line]
+        return [filenames, user_data, err_profile][line]
     else:
-        return [filenames, s_data, err_profile]
+        return [filenames, user_data, err_profile]
 
 
 def get_line_numbers(page, curr_line):
@@ -105,10 +107,11 @@ def get_selection(filename, curr_line, direction=''):
 
 class App:
     def __init__(self):
+        self.current_pages = {}
         self.Home = Page('Home', app=self, kind='home_page')
         self.Home.main.title('KeyScape')
         self.setup_homepage(self.Home)
-        self.current_pages = {'Home': self.Home}
+        self.current_pages['Home'] = self.Home
         return
     
 
@@ -124,22 +127,52 @@ class App:
         settings_btn.grid()
         return
     
+
     def start_settings_page(self):
         def save_settings(event):
-            s_data = get_data(2)
-            s_data['settings']['sample_size'] = int(sample_size.get())
-            save_data(s_data, 2)
+            user_data = get_data(2)
+            user_data['settings']['sample_size'] = int(sample_size.get())
+            save_data(user_data, 2)
             settings_page.close()
+        
+        def start_source_addition_page():
+            def func_wrapper(win, filepath):
+                def add_new_source(event, win = win, filepath = filepath):
+                    filepath = filepath.get()
+                    filename = os.path.basename(filepath)
+                    names, user_data, err_profile = get_data()
+                    try: 
+                        with open(filepath) as file:
+                            file.readlines()
+                        names[filename] = filepath
+                        user_data['line_numbers'][filename] = 1
+                        new_data = [names, user_data, err_profile]
+                        save_data(new_data)
+                    except Exception as e:
+                        msg = mb.Message(win.main, title='Invalid path', message='The path you have entered is invalid or we can\'t access that file.')
+                        msg.show()
+                    
+                    win.close()
+                return add_new_source
+
+            win = Page('New Source', self, 'new_source_page')
+            filepath = tk.StringVar(win.main)
+            lbl = tk.Label(win.main, text='File path: ')
+            entry = tk.Entry(win.main, textvariable=filepath)
+            entry.bind('<Return>', func=func_wrapper(win, filepath))
+            lbl.pack()
+            entry.pack()
 
         settings_page = Page('Settings', app=self, kind='settings_page')
-        self.current_pages['Settings'] = settings_page
         sample_size = tk.StringVar(settings_page.main)
         sample_size_lbl = tk.Label(settings_page.main, text='Sample Size: ')
         sample_size_eb = tk.Entry(settings_page.main, textvariable=sample_size, width=5, justify='center')
         sample_size_eb.bind('<Return>', func=save_settings)
         sample_size.set(str(resources.SAMPLE_SIZE))
+        new_source_btn = tk.Button(settings_page.main, text='Add new source', command=start_source_addition_page)
         sample_size_lbl.pack()
         sample_size_eb.pack()
+        new_source_btn.pack()
 
 
     def initialize_typing_page(self, page):
@@ -175,7 +208,6 @@ class App:
             new_page.flips = 0
             self.initialize_typing_page(new_page)
             self.setup_typing_page(new_page, txt)
-            self.current_pages[filename] = new_page
             new_page.main.focus_force()
 
         except IndexError:
@@ -264,6 +296,7 @@ class Page:
         self.kind = kind
         self.textLabel, self.lineLabel = None, None
         self.App = app
+        self.App.current_pages[self.name] = self
         self.main.bind('<Escape>', lambda event: self.close())
 
         return
@@ -454,7 +487,7 @@ class Page:
     def end_session(self):
         #find last line number and update user_data.txt
         data = get_data(line=2)
-        lines_typed = min((self.cursor.line), data['settings']['sample_size'])
+        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
         if self.flips == 0:
             self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
             data['line_numbers'][self.name] += (lines_typed)
@@ -571,7 +604,6 @@ Worst key: {worst_key}
         summary_page.display_text(summary)
         summary_page.main.protocol('WM_DELETE_WINDOW', close_orig_page(summary_page))
         summary_page.main.focus_force()
-        self.App.current_pages[summary_page.name] = summary_page
         btn = tk.Button(summary_page.main, text="Next Lesson", command=get_start_next_lesson_func(summary_page))
         btn.pack(side='bottom', pady=10)
         summary_page.main.bind('<Return>', func=get_start_next_lesson_func(summary_page))
@@ -591,7 +623,7 @@ Worst key: {worst_key}
             for page in list(self.App.current_pages.keys()):
                 self.App.current_pages[page].close()
             
-        elif self.kind in ['summary_page', 'settings_page'] and 'Home' in self.App.current_pages:
+        elif self.kind == 'settings_page' and 'Home' in self.App.current_pages:
             self.App.current_pages['Home'].main.deiconify()
 
 
