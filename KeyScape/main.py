@@ -2,8 +2,8 @@
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# make it so that you don't have to restart the app to see newly added files
-# 
+# add a way to remove sources from app to settings page
+#
 # improve app layout and graphic design
 # 
 # create link to a key accuracy graph on home page
@@ -22,7 +22,7 @@ import time
 import string
 
 
-def setup_user_profile():
+def reset_user_profile():
     with open(resources.data_filename, 'r+', encoding='utf-8') as file:
         fnames, l_data, profile = [eval(line) for line in file.readlines()]
         for char in string.printable.replace('\r\x0b\x0c', ''):
@@ -134,10 +134,11 @@ class App:
             user_data['settings']['sample_size'] = int(sample_size.get())
             save_data(user_data, 2)
             settings_page.close()
+            
         
         def start_source_addition_page():
-            def func_wrapper(win, filepath):
-                def add_new_source(event, win = win, filepath = filepath):
+            def get_add_new_source_func(win, filepath):
+                def func(event, win = win, filepath = filepath):
                     filepath = filepath.get()
                     filename = os.path.basename(filepath)
                     names, user_data, err_profile = get_data()
@@ -148,20 +149,24 @@ class App:
                         user_data['line_numbers'][filename] = 1
                         new_data = [names, user_data, err_profile]
                         save_data(new_data)
-                    except Exception as e:
+                    except FileNotFoundError or FileExistsError:
                         msg = mb.Message(win.main, title='Invalid path', message='The path you have entered is invalid or we can\'t access that file.')
                         msg.show()
                     
                     win.close()
-                return add_new_source
+                    self.Home.close()
+                    self.__init__()
+                    self.Home.main.focus_force()
+                return func
 
             win = Page('New Source', self, 'new_source_page')
             filepath = tk.StringVar(win.main)
             lbl = tk.Label(win.main, text='File path: ')
             entry = tk.Entry(win.main, textvariable=filepath)
-            entry.bind('<Return>', func=func_wrapper(win, filepath))
+            entry.bind('<Return>', func=get_add_new_source_func(win, filepath))
             lbl.pack()
             entry.pack()
+            entry.focus_force()
 
         settings_page = Page('Settings', app=self, kind='settings_page')
         sample_size = tk.StringVar(settings_page.main)
