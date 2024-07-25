@@ -2,7 +2,7 @@
 # practice idea: use network ports and another client application to view typing
 #                practice sessions in real time
 # 
-# add a way to remove sources from app to settings page
+# add a way to remove sources from app on settings page
 #
 # improve app layout and graphic design
 # 
@@ -89,7 +89,7 @@ def get_line_numbers(page, curr_line):
 def get_selection(filename, curr_line, direction=''):
     curr_line -= 1
     sources = resources.SOURCES
-    sample_size = resources.EDITOR_DATA['settings']['sample_size']
+    sample_size = resources.USER_DATA['settings']['sample_size']
     lines = open(sources[filename], encoding="UTF-8").readlines()
     selection = ''
     while lines[curr_line].lstrip(' ') == '\n':
@@ -115,86 +115,26 @@ class App:
         return
     
 
-    def setup_homepage(self, page):
-        def get_command_func(filename):
-            def func():
-                self.create_typing_page(filename)
-            return func
-        for filename in resources.SOURCES.keys():
-            btn = tk.Button(page.main, text=filename, command=get_command_func(filename))
-            btn.grid() # TODO: Fix appearance
-        settings_btn = tk.Button(page.main, text='Settings', command=self.start_settings_page)
-        settings_btn.grid()
-        return
-    
-
-    def start_settings_page(self):
-        def save_settings(event):
-            user_data = get_data(2)
-            user_data['settings']['sample_size'] = int(sample_size.get())
-            save_data(user_data, 2)
-            settings_page.close()
-            
+    def change_typing_page(self, page, line_no):
+        page.cursor.destroy()
+        if page.collat_cursor:
+            page.collat_cursor.destroy()
+        txt, curr_line = get_selection(page.name, line_no)
         
-        def start_source_addition_page():
-            def get_add_new_source_func(win, filepath):
-                def func(event, win = win, filepath = filepath):
-                    filepath = filepath.get()
-                    filename = os.path.basename(filepath)
-                    names, user_data, err_profile = get_data()
-                    try: 
-                        with open(filepath) as file:
-                            file.readlines()
-                        names[filename] = filepath
-                        user_data['line_numbers'][filename] = 1
-                        new_data = [names, user_data, err_profile]
-                        save_data(new_data)
-                    except FileNotFoundError or FileExistsError:
-                        msg = mb.Message(win.main, title='Invalid path', message='The path you have entered is invalid or we can\'t access that file.')
-                        msg.show()
-                    
-                    win.close()
-                    self.Home.close()
-                    self.__init__()
-                    self.Home.main.focus_force()
-                return func
+        page.next_btn.pack_forget() if page.flips == 0 else page.next_btn.pack(side='right', padx=15, pady=10)
+        page.prev_btn.pack_forget() if curr_line == 1 else page.prev_btn.pack(side='left', padx=15, pady=10)
+        
+        line_numbers = get_line_numbers(page, curr_line)
+        self.initialize_typing_page(page)
 
-            win = Page('New Source', self, 'new_source_page')
-            filepath = tk.StringVar(win.main)
-            lbl = tk.Label(win.main, text='File path: ')
-            entry = tk.Entry(win.main, textvariable=filepath)
-            entry.bind('<Return>', func=get_add_new_source_func(win, filepath))
-            lbl.pack()
-            entry.pack()
-            entry.focus_force()
+        page.textLabel['text'] = txt
+        page.lineLabel['text'] = line_numbers
+        page.displayed_text = txt
+        page.cursor = Cursor(page, char=txt.lstrip()[0])
 
-        settings_page = Page('Settings', app=self, kind='settings_page')
-        sample_size = tk.StringVar(settings_page.main)
-        sample_size_lbl = tk.Label(settings_page.main, text='Sample Size: ')
-        sample_size_eb = tk.Entry(settings_page.main, textvariable=sample_size, width=5, justify='center')
-        sample_size_eb.bind('<Return>', func=save_settings)
-        sample_size.set(str(resources.SAMPLE_SIZE))
-        new_source_btn = tk.Button(settings_page.main, text='Add new source', command=start_source_addition_page)
-        sample_size_lbl.pack()
-        sample_size_eb.pack()
-        new_source_btn.pack()
-
-
-    def initialize_typing_page(self, page):
-        page.time_taken = 0
-        page.collat_cursor = None
-        page.displayed_text = None
-        page.last_keypress = None
-        page.curr_line = 0
-        page.error_count = 0
-        page.backspace_count = 0
-        page.collateral_error_count = 0
-        page.key_profiles = get_data(line=3)
-        return
-    
 
     def create_typing_page(self, filename: str):
-        self.curr_line = resources.EDITOR_DATA['line_numbers'][filename]
+        self.curr_line = resources.USER_DATA['line_numbers'][filename]
         curr_line = self.curr_line
 
         try:
@@ -213,7 +153,6 @@ class App:
             new_page.flips = 0
             self.initialize_typing_page(new_page)
             self.setup_typing_page(new_page, txt)
-            new_page.main.focus_force()
 
         except IndexError:
             restart = mb.askokcancel('lesson completed', "You have completed the lesson. Would you like restart?")
@@ -224,6 +163,42 @@ class App:
                 self.create_typing_page(filename)
                 return
             
+        return
+
+
+    def initialize_typing_page(self, page):
+        page.time_taken = 0
+        page.collat_cursor = None
+        page.displayed_text = None
+        page.last_keypress = None
+        page.curr_line = 0
+        page.error_count = 0
+        page.backspace_count = 0
+        page.collateral_error_count = 0
+        page.key_profiles = get_data(line=3)
+        return
+
+
+    def refresh(self):
+        self.Home.close()
+        self.__init__()
+
+
+    def run(self):
+
+        return self.Home.main.mainloop()
+
+
+    def setup_homepage(self, page):
+        def get_command_func(filename):
+            def func():
+                self.create_typing_page(filename)
+            return func
+        for filename in resources.SOURCES.keys():
+            btn = tk.Button(page.main, text=filename, command=get_command_func(filename))
+            btn.grid() # TODO: Fix appearance
+        settings_btn = tk.Button(page.main, text='Settings', command=self.start_settings_page)
+        settings_btn.grid()
         return
     
 
@@ -237,7 +212,7 @@ class App:
         def get_flip_page_func(page, turns=1):
             def flip_page(event = None):
                 page.flips += turns
-                curr_line = resources.EDITOR_DATA['line_numbers'][filename]
+                curr_line = resources.USER_DATA['line_numbers'][filename]
                 curr_line = get_selection(filename, curr_line)[1]
                 target_line = min(curr_line, (curr_line - resources.SAMPLE_SIZE*page.flips))
                 if target_line == curr_line:
@@ -261,26 +236,76 @@ class App:
         btn_bar.pack(side='bottom', fill='x')
 
 
-    def change_typing_page(self, page, line_no):
-        page.cursor.destroy()
-        if page.collat_cursor:
-            page.collat_cursor.destroy()
-        txt, curr_line = get_selection(page.name, line_no)
-        
-        page.next_btn.pack_forget() if page.flips == 0 else page.next_btn.pack(side='right', padx=15, pady=10)
-        page.prev_btn.pack_forget() if curr_line == 1 else page.prev_btn.pack(side='left', padx=15, pady=10)
-        
-        line_numbers = get_line_numbers(page, curr_line)
-        self.initialize_typing_page(page)
+    def start_settings_page(self): # Maybe change this to a subclass of Page?
+        def save_settings(event):
+            user_data = get_data(2)
+            user_data['settings']['sample_size'] = int(sample_size.get())
+            save_data(user_data, 2)
+            settings_page.close()
+            
+        def start_source_addition_page():
+            def get_add_new_source_func(win, filepath):
+                def func(event, win = win, filepath = filepath):
+                    filepath = filepath.get()
+                    filename = os.path.basename(filepath)
+                    names, user_data, err_profile = get_data()
+                    try: 
+                        with open(filepath, encoding='utf-8') as file:
+                            file.readlines()
+                        names[filename] = filepath
+                        user_data['line_numbers'][filename] = 1
+                        new_data = [names, user_data, err_profile]
+                        save_data(new_data)
+                    except FileNotFoundError or FileExistsError:
+                        msg = mb.Message(win.main, title='Invalid path', message='The path you have entered is invalid or we can\'t access that file.')
+                        msg.show()
+                    
+                    win.close()
+                    self.refresh()
+                return func
 
-        page.textLabel['text'] = txt
-        page.lineLabel['text'] = line_numbers
-        page.displayed_text = txt
-        page.cursor = Cursor(page, char=txt.lstrip()[0])
+            win = Page('New Source', self, 'new_source_page')
+            filepath = tk.StringVar(win.main)
+            lbl = tk.Label(win.main, text='File path: ')
+            entry = tk.Entry(win.main, textvariable=filepath)
+            entry.bind('<Return>', func=get_add_new_source_func(win, filepath))
+            lbl.pack()
+            entry.pack()
+            entry.focus_force()
 
+        def start_source_removal_page():
+            def get_delete_source_func(win, source):
+                def func():
+                    sources, user_data = resources.SOURCES, resources.USER_DATA
+                    err_profile = get_data(3)
+                    sources.pop(source)
+                    user_data['line_numbers'].pop(source)
+                    new_data = [sources, user_data, err_profile]
+                    save_data(new_data)
+                    win.close()
+                    self.refresh()
+                return func
 
-    def run(self):
-        return self.Home.main.mainloop()
+            win = Page('Delete Source', self, 'rem_source_page')
+            for source in resources.SOURCES:
+                lbl = tk.Label(win.main, text=source+":")
+                btn = tk.Button(win.main, text='Delete', command=get_delete_source_func(win, source))
+                lbl.pack()
+                btn.pack()
+            ...
+
+        settings_page = Page('Settings', app=self, kind='settings_page')
+        sample_size = tk.StringVar(settings_page.main)
+        sample_size_lbl = tk.Label(settings_page.main, text='Sample Size: ')
+        sample_size_eb = tk.Entry(settings_page.main, textvariable=sample_size, width=5, justify='center')
+        sample_size_eb.bind('<Return>', func=save_settings)
+        sample_size.set(str(resources.SAMPLE_SIZE))
+        add_new_source_btn = tk.Button(settings_page.main, text='Add new source', command=start_source_addition_page)
+        del_source_btn = tk.Button(settings_page.main, text='Remove source', command=start_source_removal_page)
+        sample_size_lbl.pack()
+        sample_size_eb.pack()
+        add_new_source_btn.pack()
+        del_source_btn.pack()
 
 
 class Page:
@@ -303,9 +328,59 @@ class Page:
         self.App = app
         self.App.current_pages[self.name] = self
         self.main.bind('<Escape>', lambda event: self.close())
+        self.main.focus_force()
 
         return
     
+
+    def close(self):
+        self.main.destroy()
+        self.App.current_pages.pop(self.name)
+
+        if self.kind == 'home_page':
+            for page in list(self.App.current_pages.keys()):
+                self.App.current_pages[page].close()
+            
+        elif self.kind == 'settings_page' and 'Home' in self.App.current_pages:
+            self.App.current_pages['Home'].main.deiconify()
+
+
+    def create_summary_page(self, summary):
+        
+        def close_orig_page(summary_page):
+            def func(event=None):
+                summary_page.close()
+                self.App.current_pages[summary_page.original_page.name].close()
+            return func
+        
+        def get_start_next_lesson_func(summary_page):
+            def start_next_lesson(event=None):
+                close_orig_page(summary_page)()
+                self.App.create_typing_page(self.name)
+            return start_next_lesson
+
+        def get_review_next_lesson_func(summary_page, target_line):
+            def review_next_lesson(event=None):
+                summary_page.close()
+                self.App.change_typing_page(self, target_line)
+                self.flips -= 1
+            return review_next_lesson
+        
+        
+        summary_page = Page('Summary', self.App, 'summary_page', "100x100+100+100")
+        summary_page.original_page = self
+        summary_page.display_text(summary)
+        summary_page.main.protocol('WM_DELETE_WINDOW', close_orig_page(summary_page))
+        btn = tk.Button(summary_page.main, text="Next Lesson", command=get_start_next_lesson_func(summary_page))
+        btn.pack(side='bottom', pady=10)
+        summary_page.main.bind('<Return>', func=get_start_next_lesson_func(summary_page))
+        summary_page.main.bind('<Escape>',func= close_orig_page(summary_page))
+
+        if self.flips != 0:
+            
+            target_line = int(self.lineLabel['text'][:2]) + resources.SAMPLE_SIZE
+            summary_page.main.bind('<Right>', func=get_review_next_lesson_func(summary_page, target_line))
+
 
     def display_text(self, txt: str, bg: str ='', fg: str ='black') -> str:
         
@@ -327,7 +402,7 @@ class Page:
         self.main.minsize(new_wn_width, new_wn_height)
         bg = self.main['bg'] if bg == '' else bg
         if self.kind == 'typing_page':
-            curr_line = resources.EDITOR_DATA['line_numbers'][self.name]
+            curr_line = resources.USER_DATA['line_numbers'][self.name]
             line_numbers = get_line_numbers(self, curr_line)
             self.lineLabel = tk.Label(self.main, text=line_numbers, font='courier 10', justify='left', bg=bg, fg='grey')
             self.lineLabel.place(x=x_pad, y=y_pad)
@@ -340,6 +415,108 @@ class Page:
         self.textLabel.place(x=label_x_pad, y=y_pad)
         self.displayed_text = txt
         return
+
+
+    def end_session(self):
+        #find last line number and update user_data.txt
+        data = get_data(line=2)
+        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
+        if self.flips == 0:
+            self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
+            data['line_numbers'][self.name] += (lines_typed)
+            save_data(data, line=2)
+        save_data(self.key_profiles, line=3)
+        
+        tc = len(self.cursor.typable_text)
+        cps = 1/(self.time_taken/tc)
+        wpm = round(cps/5*60)
+        mins = int(self.time_taken/60)
+        secs = round(self.time_taken % 60)
+        ukp = (self.error_count + self.collateral_error_count + self.backspace_count) / tc
+
+        #possible function below?
+        keys = list(self.key_profiles.keys())
+        keys.remove(' ')
+        best_key = '0'
+        worst_key = '0'
+        scores = {}
+        perfect_scores = 0
+        bottom_scores = 0
+        for char in keys:
+                incorrect = self.key_profiles[char]['incorrect']
+                correct = self.key_profiles[char]['correct']
+                try:
+                    if incorrect == 0:
+                        scores[char] = 1
+                        perfect_scores += 1
+                    else:
+                        scores[char] = 1 - incorrect/correct
+                except ZeroDivisionError:
+                    scores[char] = 0
+                    bottom_scores += 1
+        
+        if perfect_scores > 1:
+            best_key = '0'
+            best_score = 0
+            for key in scores:
+                if scores[key] == 1:
+                    score = self.key_profiles[key]['correct']
+                    if score > best_score:
+                        best_key = key
+                        best_score = score
+        else:
+            for key in scores:
+                if scores[key] > scores[best_key]:
+                    best_key = key
+
+        if bottom_scores > 1:
+            worst_key = '0'
+            worst_score = scores['0']
+            for key in scores:
+                if scores[key] == 0:
+                    score = self.key_profiles[key]['incorrect']
+                    if score < worst_score:
+                        worst_key = key
+                        worst_score = score
+        else:
+            for key in scores:
+                if scores[key] < scores[worst_key]:
+                    worst_key = key
+        
+
+        for key in best_key, worst_key:
+            if key == '\n':
+                key = 'Enter'
+        summary = f'''
+        
+Total Characters: {tc}
+
+Time taken: {mins}:{secs:0>2}
+
+Wpm: {wpm}
+
+Errors: {self.error_count}
+
+Keys type collaterally before backspacing: {self.collateral_error_count}
+
+Backspaces: {self.backspace_count}
+
+Unproductive keystrokes: {ukp:.0%}
+
+Best key: {best_key}
+
+Worst key: {worst_key}
+'''
+        self.create_summary_page(summary)
+
+
+    def pause(self, event):
+        try:
+            self.last_keypress = None
+            self.cursor.color = 'orange'
+            self.cursor.draw(self.cursor.char)
+        except AttributeError:
+            pass
 
     @track_time
     def update(self, event):
@@ -480,158 +657,6 @@ class Page:
         return
 
 
-    def pause(self, event):
-        try:
-            self.last_keypress = None
-            self.cursor.color = 'orange'
-            self.cursor.draw(self.cursor.char)
-        except AttributeError:
-            pass
-
-
-    def end_session(self):
-        #find last line number and update user_data.txt
-        data = get_data(line=2)
-        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
-        if self.flips == 0:
-            self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
-            data['line_numbers'][self.name] += (lines_typed)
-            save_data(data, line=2)
-        save_data(self.key_profiles, line=3)
-        
-        tc = len(self.cursor.typable_text)
-        cps = 1/(self.time_taken/tc)
-        wpm = round(cps/5*60)
-        mins = int(self.time_taken/60)
-        secs = round(self.time_taken % 60)
-        ukp = (self.error_count + self.collateral_error_count + self.backspace_count) / tc
-
-        #possible function below?
-        keys = list(self.key_profiles.keys())
-        keys.remove(' ')
-        best_key = '0'
-        worst_key = '0'
-        scores = {}
-        perfect_scores = 0
-        bottom_scores = 0
-        for char in keys:
-                incorrect = self.key_profiles[char]['incorrect']
-                correct = self.key_profiles[char]['correct']
-                try:
-                    if incorrect == 0:
-                        scores[char] = 1
-                        perfect_scores += 1
-                    else:
-                        scores[char] = 1 - incorrect/correct
-                except ZeroDivisionError:
-                    scores[char] = 0
-                    bottom_scores += 1
-        
-        if perfect_scores > 1:
-            best_key = '0'
-            best_score = 0
-            for key in scores:
-                if scores[key] == 1:
-                    score = self.key_profiles[key]['correct']
-                    if score > best_score:
-                        best_key = key
-                        best_score = score
-        else:
-            for key in scores:
-                if scores[key] > scores[best_key]:
-                    best_key = key
-
-        if bottom_scores > 1:
-            worst_key = '0'
-            worst_score = scores['0']
-            for key in scores:
-                if scores[key] == 0:
-                    score = self.key_profiles[key]['incorrect']
-                    if score < worst_score:
-                        worst_key = key
-                        worst_score = score
-        else:
-            for key in scores:
-                if scores[key] < scores[worst_key]:
-                    worst_key = key
-        
-
-        for key in best_key, worst_key:
-            if key == '\n':
-                key = 'Enter'
-        summary = f'''
-        
-Total Characters: {tc}
-
-Time taken: {mins}:{secs:0>2}
-
-Wpm: {wpm}
-
-Errors: {self.error_count}
-
-Keys type collaterally before backspacing: {self.collateral_error_count}
-
-Backspaces: {self.backspace_count}
-
-Unproductive keystrokes: {ukp:.0%}
-
-Best key: {best_key}
-
-Worst key: {worst_key}
-'''
-        self.create_summary_page(summary)
-
-
-    def create_summary_page(self, summary):
-        
-        def close_orig_page(summary_page):
-            def func(event=None):
-                summary_page.close()
-                self.App.current_pages[summary_page.original_page.name].close()
-            return func
-        
-        def get_start_next_lesson_func(summary_page):
-            def start_next_lesson(event=None):
-                close_orig_page(summary_page)()
-                self.App.create_typing_page(self.name)
-            return start_next_lesson
-
-        def get_review_next_lesson_func(summary_page, target_line):
-            def review_next_lesson(event=None):
-                summary_page.close()
-                self.App.change_typing_page(self, target_line)
-                self.flips -= 1
-            return review_next_lesson
-        
-        
-        summary_page = Page('Summary', self.App, 'summary_page', "100x100+100+100")
-        summary_page.original_page = self
-        summary_page.display_text(summary)
-        summary_page.main.protocol('WM_DELETE_WINDOW', close_orig_page(summary_page))
-        summary_page.main.focus_force()
-        btn = tk.Button(summary_page.main, text="Next Lesson", command=get_start_next_lesson_func(summary_page))
-        btn.pack(side='bottom', pady=10)
-        summary_page.main.bind('<Return>', func=get_start_next_lesson_func(summary_page))
-        summary_page.main.bind('<Escape>',func= close_orig_page(summary_page))
-
-        if self.flips != 0:
-            
-            target_line = int(self.lineLabel['text'][:2]) + resources.SAMPLE_SIZE
-            summary_page.main.bind('<Right>', func=get_review_next_lesson_func(summary_page, target_line))
-
-
-    def close(self):
-        self.main.destroy()
-        self.App.current_pages.pop(self.name)
-
-        if self.kind == 'home_page':
-            for page in list(self.App.current_pages.keys()):
-                self.App.current_pages[page].close()
-            
-        elif self.kind == 'settings_page' and 'Home' in self.App.current_pages:
-            self.App.current_pages['Home'].main.deiconify()
-
-
 class Cursor:
     def __init__(self, page, x=20, y=10, char=None, color='green', width = resources.CURSOR['width'], height = resources.CURSOR['height']):
         self.main = page.main
@@ -652,13 +677,29 @@ class Cursor:
         self.char_label.place(x=-3,y=-5)
         return
 
-    @property
-    def x(self):
-        return self.line_pos * self.width + self.pos[0] +  + self.Page.lineLabel.winfo_width()
 
-    @property
-    def y(self):
-        return self.line * (self.height + 2) + self.pos[1]
+    def destroy(self):
+        self.Frame.destroy()
+        del(self)
+        return
+
+
+    def draw(self, char):
+        width = self.width
+        if char == '\n':
+            char = '⏎'
+            width = self.width * 1.5
+
+        if self.main and self.at_end and self.color == 'green':
+            self.Page.end_session()
+
+
+        elif self.main:
+            self.char = char
+            self.Frame.place(x=self.x,y=self.y, width=width, height=self.height)
+            self.char_label.config(text=self.char, bg=self.color)
+
+        return
 
     @property
     def line_pos(self):
@@ -690,29 +731,13 @@ class Cursor:
             self.char = text[self.text_pos]
         return 
 
+    @property
+    def x(self):
+        return self.line_pos * self.width + self.pos[0] +  + self.Page.lineLabel.winfo_width()
 
-    def draw(self, char):
-        width = self.width
-        if char == '\n':
-            char = '⏎'
-            width = self.width * 1.5
-
-        if self.main and self.at_end and self.color == 'green':
-            self.Page.end_session()
-
-
-        elif self.main:
-            self.char = char
-            self.Frame.place(x=self.x,y=self.y, width=width, height=self.height)
-            self.char_label.config(text=self.char, bg=self.color)
-
-        return
-
-
-    def destroy(self):
-        self.Frame.destroy()
-        del(self)
-        return
+    @property
+    def y(self):
+        return self.line * (self.height + 2) + self.pos[1]
 
 
 
