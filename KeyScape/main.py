@@ -806,6 +806,5 @@ if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
     os.system('type main.py > sample.txt')
-    reset_user_profile()
     app = App()
     app.run()
