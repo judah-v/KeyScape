@@ -12,6 +12,7 @@ exec(f"USER_DATA = {raw_data[1]}")
 NONE_TYPABLES = ['Shift_L', 'Shift_R', 'Caps_Lock', 'Control_L','Control_R', 'Win_L', 'Alt_L', 'Alt_R', 'Control_R', 'Scroll_Lock', 'Pause', 'Insert', 'Home', 'Prior', 'Delete', 'End', 'Next', 'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'XF86Launch0', '??', 'XF86Mail', 'Num_Lock', 'Up', 'Down', 'Left', 'Right']
 
 SAMPLE_SIZE = USER_DATA['settings']['sample_size']
+MAX_SAMPLE_SIZE = 50
 
 CURSOR = {'width': 8, 'height': 14}
 

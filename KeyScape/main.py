@@ -4,9 +4,7 @@
 # 
 # improve app layout and graphic design
 # 
-# add filter for unsupported keys to get_selection
-# 
-# add a metrics page with typing speed and key accuracy graphs and a typo 
+# add a metrics page with typing speed graph, key accuracy graph and a typo 
 # hotmap
 # 
 # add 'type a book' feature to scrape chapters from readnovelfull and insert 
@@ -22,17 +20,16 @@ import os
 import resources 
 import time
 import string
+import datetime
 
 
 def reset_user_profile():
-    with open(resources.data_filename, 'r+', encoding='utf-8') as file:
-        fnames, l_data, profile = [eval(line) for line in file.readlines()]
-        for char in string.printable.replace('\r\x0b\x0c', ''):
-            profile[char] = {'correct': 0, 'incorrect': 0}
-        content = f'{fnames}\n{l_data}\n{profile}'
-        file.seek(0)
-        file.write(content)
-        file.truncate()
+    err_profile = {}
+    speed_data = {}
+    for char in string.printable.replace('\r\x0b\x0c', ''):
+        err_profile[char] = {'correct': 0, 'incorrect': 0}
+    save_data(err_profile, line=3)
+    save_data(speed_data, line=4)
 
 
 def track_time(func):
@@ -55,13 +52,17 @@ def save_data(new_data, line=None):
     '''
 
     with open(resources.data_filename, 'r+',encoding="UTF-8") as file:
-        filenames, user_data, err_profile = [eval(l) for l in file.readlines()]
-        content = [filenames, user_data, err_profile]
+        filenames, user_data, err_profile, speed_data = [eval(l) for l in file.readlines()]
+        content = [filenames, user_data, err_profile, speed_data]
         if line:
             content[line-1] = new_data
         else:
             content = new_data
-        content = '{0}\n{1}\n{2}'.format(*content)
+
+        formula = ''
+        for l in range(len(content)):
+            formula += '{'+ f'{l}' + '}\n'
+        content = formula.format(*content)
         file.seek(0)
         file.write(content)
         file.truncate()
@@ -72,23 +73,23 @@ def get_data(line = None):
     if line:
         line -= 1
     with open(resources.data_filename, encoding='utf-8') as file:
-        filenames, user_data, err_profile = [eval(line) for line in file.readlines()]
+        all_data = [eval(line) for line in file.readlines()]
         
     if line:
-        return [filenames, user_data, err_profile][line]
+        return all_data[line]
     else:
-        return [filenames, user_data, err_profile]
+        return all_data
 
 
-def get_line_numbers(page, curr_line):
+def get_line_numbers(page, curr_line, amount):
     line_numbers = ''
     if page.kind == 'typing_page':
-        for line in range(resources.SAMPLE_SIZE):
+        for line in range(amount):
             line_numbers += f'{curr_line + line:2}\n'
     return line_numbers[:-1]
 
 
-def get_selection(filename, curr_line, direction=''):
+def get_selection(filename, curr_line):
     curr_line -= 1
     sources = resources.SOURCES
     sample_size = resources.USER_DATA['settings']['sample_size']
@@ -101,10 +102,19 @@ def get_selection(filename, curr_line, direction=''):
     selection = lines[curr_line:curr_line + sample_size] if not selection else selection
     txt = ''.join(selection)
     txt = txt.replace('’',"'")
+    for char in txt:
+        if char not in string.printable.replace('\r\x0b\x0c', ''):
+            txt = txt.replace(char, '')
     # Stop chaos from reigning(both symbols mean the same thing but are 
     # technically different characters and the first isn't found on 
     # keyboards, so it's impossible to type...)
     return (txt, curr_line+1)
+
+
+class Date:
+    def __init__(self, date, year):
+        self.date = date
+        self.year = year
 
 
 class App:
@@ -208,6 +218,10 @@ class Page:
                  dimensions=(resources.WIN_CONFIG['min_width'],
                  resources.WIN_CONFIG['min_height'])):
         
+        if title in app.current_pages:
+            app.current_pages[title].main.deiconify()
+            self.already_existed = True
+            return
         main = tk.Tk(kind)
         main.title(title)
         main.minsize(*dimensions)
@@ -221,6 +235,7 @@ class Page:
         self.App.current_pages[self.name] = self
         self.main.bind('<Escape>', lambda event: self.close())
         self.main.focus_force()
+        self.already_existed = False
 
         return
     
@@ -235,7 +250,7 @@ class Page:
             
         elif self.kind == 'settings_page' and 'Home' in self.App.current_pages:
             self.App.current_pages['Home'].main.deiconify()
-
+        
 
     def display_text(self, txt: str, bg: str ='', fg: str ='black') -> str:
         x_pad = resources.WIN_CONFIG['x_padding']
@@ -310,8 +325,9 @@ class SettingsPage(Page):
         del_source_btn.pack()
 
     def save_settings(self, event = None):
+            new_size = min(int(self.sample_size.get()), resources.MAX_SAMPLE_SIZE)
             user_data = get_data(2)
-            user_data['settings']['sample_size'] = int(self.sample_size.get())
+            user_data['settings']['sample_size'] = new_size
             save_data(user_data, 2)
             self.close()
 
@@ -369,6 +385,8 @@ class SettingsPage(Page):
 class TypingPage(Page):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.already_existed:
+            return
         filename = self.name
         self.curr_line = resources.USER_DATA['line_numbers'][filename]
         curr_line = self.curr_line
@@ -438,7 +456,8 @@ class TypingPage(Page):
         self.next_btn.pack_forget() if self.flips == 0 else self.next_btn.pack(side='right', padx=15, pady=10)
         self.prev_btn.pack_forget() if curr_line == 1 else self.prev_btn.pack(side='left', padx=15, pady=10)
         
-        line_numbers = get_line_numbers(self, curr_line)
+        num_lines = len(self.displayed_text.splitlines())
+        line_numbers = get_line_numbers(self, curr_line, num_lines)
         self.initialize_variables()
         self.scale_window(txt)
         self.textLabel['text'] = txt
@@ -448,7 +467,7 @@ class TypingPage(Page):
         return
 
 
-    def create_summary_page(self, summary):
+    def create_summary_page(self, perf_data):
         
         def close_orig_page(summary_page):
             def func(event=None):
@@ -469,6 +488,26 @@ class TypingPage(Page):
                 self.flips -= 1
             return review_next_lesson
         
+        summary = f'''
+        
+Total Characters: {perf_data['total_chars']}
+
+Time taken: {perf_data['mins']}:{perf_data['secs']:0>2}
+
+Wpm: {perf_data['wpm']}
+
+Errors: {perf_data['errors']}
+
+Keys type collaterally before backspacing: {perf_data['collat_errors']}
+
+Backspaces: {perf_data['backspaces']}
+
+Unproductive keystrokes: {perf_data['unprod_keystrokes']:.0%}
+
+Best key: {perf_data['best_key']}
+
+Worst key: {perf_data['worst_key']}
+'''
         
         summary_page = Page('Summary', self.App, 'summary_page', "100x100+100+100")
         summary_page.original_page = self
@@ -490,7 +529,8 @@ class TypingPage(Page):
         y_pad = resources.WIN_CONFIG['y_padding']
         bg = bg or self.main['bg']
         curr_line = resources.USER_DATA['line_numbers'][self.name]
-        line_numbers = get_line_numbers(self, curr_line)
+        num_lines = len(txt.splitlines())
+        line_numbers = get_line_numbers(self, curr_line, num_lines)
         self.lineLabel = tk.Label(self.main, text=line_numbers, font='courier 10', justify='left', bg=bg, fg='grey')
         self.lineLabel.place(x=x_pad, y=y_pad)
         self.lineLabel.update()
@@ -498,21 +538,34 @@ class TypingPage(Page):
 
 
     def end_session(self):
-        #find last line number and update user_data.txt
-        data = get_data(line=2)
-        lines_typed = min((self.cursor.line+1), data['settings']['sample_size'])
-        if self.flips == 0:
-            self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
-            data['line_numbers'][self.name] += (lines_typed)
-            save_data(data, line=2)
-        save_data(self.key_profiles, line=3)
-        
-        tc = len(self.cursor.typable_text)
-        cps = 1/(self.time_taken/tc)
-        wpm = round(cps/5*60)
+        total_chars = len(self.cursor.typable_text)
+        chars_per_second = 1/(self.time_taken/total_chars)
+        wpm = round(chars_per_second/5*60)
         mins = int(self.time_taken/60)
         secs = round(self.time_taken % 60)
-        ukp = (self.error_count + self.collateral_error_count + self.backspace_count) / tc
+        ukp = (self.error_count + self.collateral_error_count + self.backspace_count) / total_chars
+
+        #find last line number and update user_data.txt
+        user_data = get_data(line=2)
+        speed_data = get_data(line=4)
+        lines_typed = min((self.cursor.line+1), user_data['settings']['sample_size'])
+
+        date = datetime.datetime.today().strftime("%b %d, %Y")
+        if date in speed_data:
+            avg_wpm = round((speed_data[date]+ wpm)/2)
+        else:
+            avg_wpm = wpm
+        speed_data[date] = avg_wpm
+        save_data(speed_data, line=4)
+
+        if self.flips == 0:
+            self.main.bind('<Key>', func=lambda event: 1+1) # makes it impossible to type anything else
+            user_data['line_numbers'][self.name] += (lines_typed)
+            save_data(user_data, line=2)
+
+        save_data(self.key_profiles, line=3)
+        
+        
 
         #possible function below?
         keys = list(self.key_profiles.keys())
@@ -567,27 +620,21 @@ class TypingPage(Page):
         for key in best_key, worst_key:
             if key == '\n':
                 key = 'Enter'
-        summary = f'''
         
-Total Characters: {tc}
-
-Time taken: {mins}:{secs:0>2}
-
-Wpm: {wpm}
-
-Errors: {self.error_count}
-
-Keys type collaterally before backspacing: {self.collateral_error_count}
-
-Backspaces: {self.backspace_count}
-
-Unproductive keystrokes: {ukp:.0%}
-
-Best key: {best_key}
-
-Worst key: {worst_key}
-'''
-        self.create_summary_page(summary)
+        performance_data = {
+            'total_chars': total_chars,
+            'mins': mins,
+            'secs': secs,
+            'wpm': wpm,
+            'errors': self.error_count,
+            'collat_errors': self.collateral_error_count,
+            'backspaces': self.backspace_count,
+            'unprod_keystrokes': ukp,
+            'best_key': best_key,
+            'worst_key': worst_key,
+        }
+        
+        self.create_summary_page(performance_data)
 
 
     def initialize_variables(self):
@@ -750,10 +797,15 @@ Worst key: {worst_key}
         return
 
 
+class MetricsPage(Page):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
 
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
     os.system('type main.py > sample.txt')
+    reset_user_profile()
     app = App()
     app.run()
