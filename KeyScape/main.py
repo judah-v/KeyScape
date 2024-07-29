@@ -324,6 +324,7 @@ class SettingsPage(Page):
         add_new_source_btn.pack()
         del_source_btn.pack()
 
+
     def save_settings(self, event = None):
             new_size = min(int(self.sample_size.get()), resources.MAX_SAMPLE_SIZE)
             user_data = get_data(2)
@@ -337,14 +338,14 @@ class SettingsPage(Page):
                 def func(event, win = win, filepath = filepath):
                     filepath = filepath.get()
                     filename = os.path.basename(filepath)
-                    names, user_data, err_profile = get_data()
+                    sources, user_data = resources.SOURCES, resources.USER_DATA
                     try: 
                         with open(filepath, encoding='utf-8') as file:
                             file.readlines()
-                        names[filename] = filepath
+                        sources[filename] = filepath
                         user_data['line_numbers'][filename] = 1
-                        new_data = [names, user_data, err_profile]
-                        save_data(new_data)
+                        save_data(sources, line=1)
+                        save_data(user_data, line=2)
                     except FileNotFoundError or FileExistsError:
                         msg = mb.Message(win.main, title='Invalid path', message='The path you have entered is invalid or we can\'t access that file.')
                         msg.show()
@@ -366,11 +367,10 @@ class SettingsPage(Page):
             def get_delete_source_func(win, filename):
                 def func():
                     sources, user_data = resources.SOURCES, resources.USER_DATA
-                    err_profile = get_data(3)
                     sources.pop(filename)
                     user_data['line_numbers'].pop(filename)
-                    new_data = [sources, user_data, err_profile]
-                    save_data(new_data)
+                    save_data(sources, line=1)
+                    save_data(user_data, line=2)
                     self.App.Home.refresh()
                 return func
 
