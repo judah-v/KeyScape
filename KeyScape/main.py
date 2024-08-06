@@ -4,8 +4,10 @@
 # 
 # improve app layout and graphic design
 # 
-# add a metrics page with typing speed graph, key accuracy graph and a typo 
-# hotmap
+# add a typo hotmap to metrics page
+#
+# add avg speed label to metrics page and change button name to 'Details' or 
+# similar
 # 
 # add 'type a book' feature to scrape chapters from readnovelfull and insert 
 # them into files to type
@@ -21,6 +23,8 @@ import resources
 import time
 import string
 import datetime
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def reset_user_profile():
@@ -47,8 +51,8 @@ def track_time(func):
 
 def save_data(new_data, line=None):
     '''
-    data -> [index, new_value]
-    index = index of data in tuple in format (line number, number of lines per segment)
+    data -> [Dict] representing new data\n
+    line -> [Int] representing number of line to write data to
     '''
 
     with open(resources.data_filename, 'r+',encoding="UTF-8") as file:
@@ -62,7 +66,7 @@ def save_data(new_data, line=None):
         formula = ''
         for l in range(len(content)):
             formula += '{'+ f'{l}' + '}\n'
-        content = formula.format(*content)
+        content = formula.format(*content)[:-1]
         file.seek(0)
         file.write(content)
         file.truncate()
@@ -110,11 +114,6 @@ def get_selection(filename, curr_line):
     # keyboards, so it's impossible to type...)
     return (txt, curr_line+1)
 
-
-class Date:
-    def __init__(self, date, year):
-        self.date = date
-        self.year = year
 
 
 class App:
@@ -293,19 +292,27 @@ class HomePage(Page):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.main.title('KeyScape')
-        def get_command_func(filename):
+
+        def get_typing_page_start_func(filename):
             def func():
                 page = TypingPage(filename, app = self.App)
             return func
 
         def start_settings_page():
             page = SettingsPage('Settings', self.App, 'settings_page')
+
+        def start_metrics_page():
+            page = MetricsPage('Metrics', self.App, 'metrics_page')
+
         for filename in resources.SOURCES.keys():
-            btn = ttk.Button(self.main, text=filename, command=get_command_func(filename))
+            btn = ttk.Button(self.main, text=filename, command=get_typing_page_start_func(filename))
             btn.grid() # TODO: Fix appearance
 
         settings_btn = ttk.Button(self.main, text='Settings', command=start_settings_page)
         settings_btn.grid()
+
+        metrics_page_btn = ttk.Button(self.main, text='Performance', command=start_metrics_page)
+        metrics_page_btn.grid()
         return
 
 
@@ -550,7 +557,7 @@ Worst key: {perf_data['worst_key']}
         speed_data = get_data(line=4)
         lines_typed = min((self.cursor.line+1), user_data['settings']['sample_size'])
 
-        date = datetime.datetime.today().strftime("%b %d, %Y")
+        date = datetime.datetime.today().toordinal()
         if date in speed_data:
             avg_wpm = round((speed_data[date]+ wpm)/2)
         else:
@@ -800,11 +807,134 @@ Worst key: {perf_data['worst_key']}
 class MetricsPage(Page):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.main.title('Performance')
+        speed_btn = ttk.Button(self.main, text='Speed Overview', command=self.show_speed_graph)
+        speed_btn.grid()
+
+        accuracy_btn = ttk.Button(self.main, text='Accuracy Overview', command=self.show_accuracy_graph)
+        accuracy_btn.grid()
+
+
+    def get_close_graph_func(self, fig):
+        def close(event):
+            if event.key == 'escape':
+                plt.close(fig)
+        return close
+    
+
+    def show_speed_graph(self):
+        def update_annot(ind):
+            x,y   = line.get_data()
+            annot.xy = (x[ind['ind'][0]], y[ind['ind'][0]])
+            text = f"{str(y[ind['ind'][0]])} wpm, {x[ind['ind'][0]]}" 
+            annot.set_text(text)
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = line.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        data = get_data(line=4)
+        x = [datetime.datetime.fromordinal(x).strftime("%b %d, %Y") for x in data.keys()]
+        x.sort()
+        y = [data[datetime.datetime.strptime(d, "%b %d, %Y").toordinal()] for d in x]
+        if len(x) == 0:
+            m = mb.Message(self.main, title="No data stored", message="Complete a lesson to review your performance")
+            m.show()
+            return
+        fig, ax = plt.subplots()
+        fig.canvas.manager.set_window_title('Typing Speed Overview')
+        line = plt.plot(x, y, 'o-')[0]
+        plt.yticks(range(min(y), max(y)+1, 1))
+        plt.xlabel('Date')
+        plt.ylabel('Words Per Minute')
+        plt.suptitle('Speed Overview (Avg speed per day)')
+        annot = ax.annotate('', (0,0), xytext=(-20,20),textcoords="offset points", bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+        fig.canvas.mpl_connect('key_release_event', self.get_close_graph_func(fig))
+        plt.show()
+
+        
+    def show_accuracy_graph(self):
+        def update_annot(ind):
+            pos = sc.get_offsets()[ind["ind"][0]]
+            annot.xy = pos
+            text = f"{str(y[ind['ind'][0]])}%, {x[ind['ind'][0]]}" 
+            annot.set_text(text)
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = sc.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        data = get_data(line=3)
+        data.pop('\t')
+        data.pop('\n')
+
+        x = list(data.keys())
+        y = []
+        for key in x.copy():
+            try:
+                inc = data[key]['incorrect']
+                cor = data[key]['correct']
+                if cor == 0 and inc == 0:
+                    x.remove(key)
+                else:
+                    score = (cor/(cor+inc))*100
+                    y.append(round(score, 1))
+            except ZeroDivisionError:
+                y.append(0)
+
+        if len(x) == 0:
+            m = mb.Message(self.main, title="No data stored", message="Complete a lesson to review your performance")
+            m.show()
+            return
+
+        fig, ax = plt.subplots()
+        fig.canvas.manager.set_window_title('Accuracy Overview')
+        fig.set_figwidth(15)
+        fig.subplots_adjust(left=0.07, right=0.955)
+        plt.yticks(np.arange(0, max(y)+1, 10))
+        plt.xlabel('Key')
+        plt.ylabel('Accuracy Rate (%)')
+        plt.suptitle('Key Accuracy Overview')
+        sc = plt.scatter(x, y)
+        annot = ax.annotate("", xy=(0,0), xytext=(-20,20),textcoords="offset points", bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+        fig.canvas.mpl_connect('key_release_event', self.get_close_graph_func(fig))
+        plt.show()
+
+
+    def close(self, *args, **kwargs):
+        super().close(*args, **kwargs)
+        plt.close('all')
+    
 
 
 if __name__ == '__main__':
     os.chdir(resources.data_folder) 
     # ^ ensures that app launches as long as resources.py, main.py, and user_data.txt are in the same folder, regardless of what directory main.py is run from (if launched by file explorer or command prompt)
+    reset_user_profile()
     os.system('type main.py > sample.txt')
     app = App()
     app.run()
