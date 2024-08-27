@@ -1,11 +1,11 @@
 import os
 
-
 data_folder = os.path.dirname(__file__) + '\\' # change if file with user data is not in the same folder as this file
 data_file = 'user_data.txt'
 data_filename = data_folder + data_file
 raw_data = open(data_filename).readlines()
 
+# obsolete; remove this
 exec(f"SOURCES = {raw_data[0]}")
 exec(f"USER_DATA = {raw_data[1]}")
 

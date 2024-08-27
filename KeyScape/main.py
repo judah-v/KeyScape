@@ -5,9 +5,11 @@
 # improve app layout and graphic design
 # 
 # add a typo hotmap to metrics page
-#
-# add avg speed label to metrics page and change button name to 'Details' or 
-# similar
+# 
+# add avg total speed label to metrics page and change button name to 'Details' 
+# or similar
+# 
+# add separate user profiles 
 # 
 # add 'type a book' feature to scrape chapters from readnovelfull and insert 
 # them into files to type
@@ -15,6 +17,7 @@
 
 
 from importlib import reload
+from statistics import mean
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.messagebox as mb
@@ -108,7 +111,7 @@ def get_selection(filename, curr_line):
     txt = txt.replace('’',"'")
     for char in txt:
         if char not in string.printable.replace('\r\x0b\x0c', ''):
-            txt = txt.replace(char, '')
+            txt = txt.replace(char, '*')
     # Stop chaos from reigning(both symbols mean the same thing but are 
     # technically different characters and the first isn't found on 
     # keyboards, so it's impossible to type...)
@@ -202,7 +205,7 @@ class Cursor:
 
     @property
     def x(self):
-        return self.line_pos * self.width + self.pos[0] +  + self.Page.lineLabel.winfo_width()
+        return self.line_pos * self.width + self.pos[0] + self.Page.lineLabel.winfo_width()
 
     @property
     def y(self):
@@ -559,10 +562,9 @@ Worst key: {perf_data['worst_key']}
 
         date = datetime.datetime.today().toordinal()
         if date in speed_data:
-            avg_wpm = round((speed_data[date]+ wpm)/2)
+            speed_data[date].append(wpm)
         else:
-            avg_wpm = wpm
-        speed_data[date] = avg_wpm
+            speed_data[date] = [wpm]
         save_data(speed_data, line=4)
 
         if self.flips == 0:
@@ -808,7 +810,7 @@ class MetricsPage(Page):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.main.title('Performance')
-        speed_btn = ttk.Button(self.main, text='Speed Overview', command=self.show_speed_graph)
+        speed_btn = ttk.Button(self.main, text='Speed Overview', command=self.show_general_speed_graph)
         speed_btn.grid()
 
         accuracy_btn = ttk.Button(self.main, text='Accuracy Overview', command=self.show_accuracy_graph)
@@ -822,7 +824,7 @@ class MetricsPage(Page):
         return close
     
 
-    def show_speed_graph(self):
+    def show_general_speed_graph(self):
         def update_annot(ind):
             x,y   = line.get_data()
             annot.xy = (x[ind['ind'][0]], y[ind['ind'][0]])
@@ -843,17 +845,27 @@ class MetricsPage(Page):
                         annot.set_visible(False)
                         fig.canvas.draw_idle()
 
+        def click(event):
+            ind = event.ind[0]
+            ordinal_date = datetime.datetime.strptime(x[ind], "%b %d, %Y").toordinal()
+            self.show_specific_date_speed_graph(ordinal_date)
+            
+
+        def get_avg(data):
+            return round(mean(data))
+
         data = get_data(line=4)
         x = [datetime.datetime.fromordinal(x).strftime("%b %d, %Y") for x in data.keys()]
         x.sort()
-        y = [data[datetime.datetime.strptime(d, "%b %d, %Y").toordinal()] for d in x]
+        y = [get_avg(data[datetime.datetime.strptime(d, "%b %d, %Y").toordinal()]) for d in x]
         if len(x) == 0:
             m = mb.Message(self.main, title="No data stored", message="Complete a lesson to review your performance")
             m.show()
             return
         fig, ax = plt.subplots()
         fig.canvas.manager.set_window_title('Typing Speed Overview')
-        line = plt.plot(x, y, 'o-')[0]
+        line = plt.plot(x, y, 'o-', picker = 5)[0]
+        tolerance = 10 # points
         plt.yticks(range(min(y), max(y)+1, 1))
         plt.xlabel('Date')
         plt.ylabel('Words Per Minute')
@@ -861,10 +873,62 @@ class MetricsPage(Page):
         annot = ax.annotate('', (0,0), xytext=(-20,20),textcoords="offset points", bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->"))
         annot.set_visible(False)
         fig.canvas.mpl_connect("motion_notify_event", hover)
+        fig.canvas.mpl_connect("pick_event", click)
         fig.canvas.mpl_connect('key_release_event', self.get_close_graph_func(fig))
         plt.show()
 
-        
+
+    def show_specific_date_speed_graph(self, ordinal_date):
+        def update_annot(ind):
+            x,y   = line.get_data()
+            annot.xy = (x[ind['ind'][0]], y[ind['ind'][0]])
+            text = f"{str(y[ind['ind'][0]])} wpm, {x[ind['ind'][0]]}" 
+            annot.set_text(text)
+            annot.get_bbox_patch().set_alpha(0.4)
+
+        def hover(event):
+            vis = annot.get_visible()
+            if event.inaxes == ax:
+                cont, ind = line.contains(event)
+                if cont:
+                    update_annot(ind)
+                    annot.set_visible(True)
+                    fig.canvas.draw_idle()
+                else:
+                    if vis:
+                        annot.set_visible(False)
+                        fig.canvas.draw_idle()
+
+        def get_avg(data):
+            return round(mean(data))
+
+        data = get_data(line=4)
+        data = data[ordinal_date]
+        enum_data = [entry for entry in enumerate(data)]
+
+        x = [entry[0]+1 for entry in enum_data]
+        y = [entry[1] for entry in enum_data]
+        date = datetime.datetime.fromordinal(ordinal_date).strftime("%A %b %d, %Y")
+        if len(x) == 0:
+            m = mb.Message(self.main, title="No data stored", message="Complete a lesson to review your performance")
+            m.show()
+            return
+        fig, ax = plt.subplots()
+        fig.canvas.manager.set_window_title(f'Typing Speed ({date})')
+        line = plt.plot(x, y, 'o-')[0]
+        plt.yticks(range(min(y), max(y)+1, 1))
+        plt.xticks(range(min(x), max(x)+1, 1))
+        plt.xlabel('Attempt')
+        plt.ylabel('Words Per Minute')
+        plt.suptitle(date)
+        plt.title(f'Average: {get_avg(data)} wpm')
+        annot = ax.annotate('', (0,0), xytext=(-20,20),textcoords="offset points", bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->"))
+        annot.set_visible(False)
+        fig.canvas.mpl_connect("motion_notify_event", hover)
+        fig.canvas.mpl_connect('key_release_event', self.get_close_graph_func(fig))
+        plt.show()
+
+
     def show_accuracy_graph(self):
         def update_annot(ind):
             pos = sc.get_offsets()[ind["ind"][0]]
